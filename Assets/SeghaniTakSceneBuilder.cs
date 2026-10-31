@@ -19,7 +19,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     const float DoorCenterX = 3f, DoorWidth = 1.2f, DoorHeight = 2.2f;
 
     Transform root;
-    Text objectiveText, stanceText, bannerText, resultTitle, resultBody;
+    Text objectiveText, stanceText, resultTitle, resultBody;
     Image vignette;
     GameObject resultPanel, pausePanel;
     Button resumeButton, restartButton, quitButton;
@@ -44,7 +44,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         BuildSafeZone(desk, objectiveText);
         BuildFeedback();
         BuildDirector();
-        BuildPause(); // BuildDebrisSpawner removed from here
+        BuildPause();
     }
 
     void BuildRoom()
@@ -252,18 +252,15 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         director.player = playerCtrl;
         director.shake = shake;
         director.shelter = safeZone;
-        director.bannerText = bannerText;
         director.resultPanel = resultPanel;
         director.resultTitle = resultTitle;
         director.resultBody = resultBody;
 
         director.Schedule(13f, () => frameProp.Trigger(director));
-        director.Schedule(18f, () => director.ShowMessage("It's getting worse!  Get low!", 2.5f, new Color(1f, 0.6f, 0.2f)));
         director.Schedule(20f, () => lampProp.Trigger(director));
         director.Schedule(23f, () => shelfProp.Trigger(director));
         director.Schedule(25f, () => windowProp.Trigger(director));
         director.Schedule(27f, () => tvProp.Trigger(director));
-        director.Schedule(30f, () => director.ShowMessage("Stay down until it stops.", 3f, Color.white));
 
         float zFront = roomDepth / 2 + wallThickness / 2;
         var plug = new GameObject("Doorway_Blocker");
@@ -322,18 +319,8 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
                                  new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(1400, 80));
         objectiveText.fontStyle = FontStyle.Bold;
 
-        bannerText = MakeText(ct, "BannerText", font, 56, TextAnchor.MiddleCenter,
-                              new Vector2(0.5f, 0.5f), new Vector2(0f, 180f), new Vector2(1600, 100));
-        bannerText.fontStyle = FontStyle.Bold;
-        bannerText.color = new Color(1, 1, 1, 0);
-
         stanceText = MakeText(ct, "StanceText", font, 30, TextAnchor.LowerCenter,
                               new Vector2(0.5f, 0f), new Vector2(0f, 25f), new Vector2(900, 50));
-
-        Text hint = MakeText(ct, "ControlsHint", font, 24, TextAnchor.LowerLeft,
-                             new Vector2(0f, 0f), new Vector2(30f, 25f), new Vector2(1400, 40));
-        hint.text = "WASD: move   Space: jump   Mouse: look   C / Ctrl: crouch   Esc: pause";
-        hint.color = new Color(1, 1, 1, 0.75f);
 
         resultPanel = MakePanel(ct, "ResultPanel", new Color(0, 0, 0, 0.78f));
         resultTitle = MakeText(resultPanel.transform, "ResultTitle", font, 72, TextAnchor.MiddleCenter,
@@ -351,6 +338,12 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         resumeButton = MakeButton(pausePanel.transform, "Resume", font, new Vector2(0f, 90f));
         restartButton = MakeButton(pausePanel.transform, "Restart", font, new Vector2(0f, -20f));
         quitButton = MakeButton(pausePanel.transform, "Quit", font, new Vector2(0f, -130f));
+        
+        Text hint = MakeText(pausePanel.transform, "ControlsHint", font, 24, TextAnchor.MiddleCenter,
+                             new Vector2(0.5f, 0f), new Vector2(0f, 40f), new Vector2(1400, 40));
+        hint.text = "WASD: move   Space: jump   Mouse: look   C / Ctrl: crouch   Esc: pause";
+        hint.color = new Color(1, 1, 1, 0.75f);
+        
         pausePanel.SetActive(false);
     }
 

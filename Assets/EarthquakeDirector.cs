@@ -17,7 +17,7 @@ public class EarthquakeDirector : MonoBehaviour
     public FirstPersonCrouchController player;
     public CameraShake shake;
     public SafeZoneTrigger shelter;
-    public Text bannerText;
+    
     public GameObject resultPanel;
     public Text resultTitle, resultBody;
 
@@ -33,20 +33,9 @@ public class EarthquakeDirector : MonoBehaviour
     AudioClip crashClip;
 
     float elapsed, coverTime = -1f, exposedSeconds;
-    float bannerTimer, bannerAge, messageLockUntil;
     bool hasReachedCover;
-    Color bannerColor = Color.white;
-
-    static readonly Color Orange = new Color(1f, 0.6f, 0.2f);
-    static readonly Color Red = new Color(1f, 0.35f, 0.3f);
 
     public void Schedule(float time, Action action) => timeline.Add(new Timed { time = time, action = action });
-
-    public void ShowMessage(string text, float seconds, Color color)
-    {
-        messageLockUntil = elapsed + seconds;
-        SetBanner(text, seconds, color);
-    }
 
     public void PlayCrash()
     {
@@ -86,8 +75,6 @@ public class EarthquakeDirector : MonoBehaviour
         sfx = gameObject.AddComponent<AudioSource>();
         sfx.spatialBlend = 0f;
         crashClip = SafeFeedback.MakeTone("Crash", new[] { 70f, 110f, 45f }, 0.015f, 0.6f, 0.5f, 7f);
-
-        if (bannerText) bannerText.color = new Color(1, 1, 1, 0);
     }
 
     void Update()
@@ -117,8 +104,6 @@ public class EarthquakeDirector : MonoBehaviour
             ApplyHazards(intensity);
             CheckRules();
         }
-
-        UpdateBanner();
     }
 
     void BeginQuake()
@@ -128,7 +113,6 @@ public class EarthquakeDirector : MonoBehaviour
         shelter.objectiveMessage = "Objective: Go under the desk.";
         shelter.Refresh();
         rumble.Play();
-        ShowMessage("EARTHQUAKE!  FIND COVER!", 2.5f, Orange);
     }
 
     void ApplyHazards(float intensity)
@@ -136,8 +120,6 @@ public class EarthquakeDirector : MonoBehaviour
         if (!shelter.IsSafe && intensity > 0.02f)
         {
             exposedSeconds += Time.deltaTime;
-            if (elapsed >= messageLockUntil && elapsed - quakeStart > 2.5f)
-                SetBanner("GET UNDER THE DESK!", 0.5f, Red);
         }
     }
 
@@ -191,31 +173,6 @@ public class EarthquakeDirector : MonoBehaviour
         }
         if (resultBody) resultBody.text = sb.ToString();
         if (resultPanel) resultPanel.SetActive(true);
-        if (bannerText) bannerText.color = new Color(1, 1, 1, 0);
-    }
-
-    void SetBanner(string text, float seconds, Color color)
-    {
-        if (!bannerText) return;
-        bool same = bannerTimer > 0f && bannerText.text == text;
-        bannerText.text = text;
-        bannerColor = color;
-        bannerTimer = seconds;
-        if (!same) bannerAge = 0f;
-    }
-
-    void UpdateBanner()
-    {
-        if (!bannerText) return;
-        Color c = bannerColor;
-        if (bannerTimer > 0f)
-        {
-            bannerTimer -= Time.deltaTime;
-            bannerAge += Time.deltaTime;
-            c.a = Mathf.Min(Mathf.Clamp01(bannerAge / 0.15f), Mathf.Clamp01(bannerTimer / 0.4f));
-        }
-        else c.a = 0f;
-        bannerText.color = c;
     }
 
     static AudioClip MakeRumble()

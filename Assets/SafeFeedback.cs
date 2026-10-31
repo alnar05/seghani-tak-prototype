@@ -57,7 +57,6 @@ public class SafeFeedback : MonoBehaviour
 
     void Update()
     {
-
         if (objectiveText && popT < 1f)
         {
             popT = Mathf.Min(1f, popT + Time.deltaTime / 0.5f);
