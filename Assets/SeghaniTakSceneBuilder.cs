@@ -4,6 +4,8 @@ using UnityEngine.UI;
 
 public class SeghaniTakSceneBuilder : MonoBehaviour
 {
+    public Level1Configuration level = new Level1Configuration();
+
     [Header("Room")]
     public float roomWidth = 10f;
     public float roomDepth = 10f;
@@ -16,7 +18,6 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     [Header("Desk")]
     public float deskTopHeight = 1.0f;
 
-    const float DoorCenterX = 3f, DoorWidth = 1.2f, DoorHeight = 2.2f;
 
     Transform root;
     Text objectiveText, stanceText, resultTitle, resultBody;
@@ -28,11 +29,21 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     Camera playerCam;
     CameraShake shake;
     SafeZoneTrigger safeZone;
+    SafeFeedback safeFeedback;
     EarthquakeDirector director;
-    FallingProp frameProp, lampProp, shelfProp, windowProp, tvProp;
+    FallingProp frameProp, lampProp, shelfProp, windowProp, tvProp, spawnLightProp, northShelf, southCaution, northCaution;
+    BoxCollider eastWall;
 
     void Awake()
     {
+        if (!GameFlow.Playing)
+        {
+            gameObject.AddComponent<GameFlow>();
+            return;
+        }
+        roomWidth = level.roomSize.x;
+        roomDepth = level.roomSize.z;
+        roomHeight = level.roomSize.y;
         foreach (var cam in Camera.allCameras) Destroy(cam.gameObject);
 
         root = new GameObject("Level1_Generated").transform;
@@ -50,115 +61,150 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     void BuildRoom()
     {
         float W = roomWidth, D = roomDepth, H = roomHeight, T = wallThickness;
-        Color wall = new Color(0.82f, 0.78f, 0.70f);
+        Color wall = new Color(.82f,.78f,.70f);
+        Box("Floor", new Vector3(0,-.05f,0), new Vector3(W+2*T,.1f,D+2*T), new Color(.35f,.25f,.18f));
+        Box("Ceiling", new Vector3(0,H+.05f,0), new Vector3(W+2*T,.1f,D+2*T), Color.gray);
+        Box("Outer_South", new Vector3(0,H/2,-D/2-T/2), new Vector3(W+2*T,H,T), wall);
+        Box("Outer_North", new Vector3(0,H/2,D/2+T/2), new Vector3(W+2*T,H,T), wall);
+        Box("Outer_West", new Vector3(-W/2-T/2,H/2,0), new Vector3(T,H,D), wall);
+        eastWall = Box("Outer_East", new Vector3(W/2+T/2,H/2,0), new Vector3(T,H,D), wall).GetComponent<BoxCollider>();
+        // Two 1.8 m-wide, 2.3 m-high openings in each room/passsage partition.
+        foreach (float x in new[] {-2f,2f})
+        {
+            Box("Partition_South", new Vector3(x,H/2,-3.025f), new Vector3(T,H,.95f), wall);
+            Box("Partition_Center", new Vector3(x,H/2,0), new Vector3(T,H,1.5f), wall);
+            Box("Partition_North", new Vector3(x,H/2,3.025f), new Vector3(T,H,.95f), wall);
+            foreach (float z in new[] {-1.65f,1.65f})
+                Box("Door_Lintel", new Vector3(x,(H+2.3f)/2,z), new Vector3(T,H-2.3f,1.8f),
+                    x > 0 ? new Color(.35f,.55f,.4f) : wall);
+        }
+        Box("Passage_Divider", new Vector3(0,H/2,0), new Vector3(4,H,.8f), wall);
+        foreach (float z in new[] {-2.8f,2.8f})
+            Box("Passage_Outer", new Vector3(0,H/2,z), new Vector3(4,H,T), wall);
+        // Seal unused strips: no narrow accidental paths behind the passage walls.
+        foreach (float z in new[] {-3.2f,3.2f})
+            Box("Passage_Void", new Vector3(0,H/2,z), new Vector3(4,H,.6f), wall);
+        foreach (var position in new[] {new Vector3(-4,H-.4f,0), new Vector3(0,H-.4f,-1.65f),
+            new Vector3(0,H-.4f,1.65f), new Vector3(4.8f,H-.4f,0)})
+        {
+            var lightGO = new GameObject("Room_Light"); lightGO.transform.SetParent(root,false);
+            lightGO.transform.localPosition = position;
+            var light = lightGO.AddComponent<Light>(); light.type = LightType.Point;
+            light.range = 6f; light.intensity = 1.1f;
+        }
+    }
 
-        Box("Floor", new Vector3(0, -0.05f, 0), new Vector3(W + 2 * T, 0.1f, D + 2 * T), new Color(0.35f, 0.25f, 0.18f));
-        Box("Ceiling", new Vector3(0, H + 0.05f, 0), new Vector3(W + 2 * T, 0.1f, D + 2 * T), new Color(0.9f, 0.9f, 0.9f));
-        Box("Wall_Back", new Vector3(0, H / 2, -(D / 2 + T / 2)), new Vector3(W + 2 * T, H, T), wall);
-        Box("Wall_Left", new Vector3(-(W / 2 + T / 2), H / 2, 0), new Vector3(T, H, D), wall);
-        Box("Wall_Right", new Vector3(W / 2 + T / 2, H / 2, 0), new Vector3(T, H, D), wall);
-
-        float zFront = D / 2 + T / 2;
-        float gapL = DoorCenterX - DoorWidth / 2f;
-        float gapR = DoorCenterX + DoorWidth / 2f;
-        float edgeL = -(W / 2 + T), edgeR = W / 2 + T;
-
-        Box("Wall_Front_L", new Vector3((edgeL + gapL) / 2, H / 2, zFront), new Vector3(gapL - edgeL, H, T), wall);
-        Box("Wall_Front_R", new Vector3((gapR + edgeR) / 2, H / 2, zFront), new Vector3(edgeR - gapR, H, T), wall);
-        float lintelH = H - DoorHeight;
-        Box("Wall_Front_Lintel", new Vector3(DoorCenterX, DoorHeight + lintelH / 2, zFront), new Vector3(DoorWidth, lintelH, T), wall);
-
-        var hinge = new GameObject("Door_Hinge").transform;
-        hinge.SetParent(root, false);
-        hinge.localPosition = new Vector3(gapL, 0f, zFront);
-        hinge.localRotation = Quaternion.Euler(0f, 80f, 0f);
-        var door = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        door.name = "Door";
-        door.transform.SetParent(hinge, false);
-        door.transform.localPosition = new Vector3(DoorWidth / 2f, DoorHeight / 2f, 0f);
-        door.transform.localScale = new Vector3(DoorWidth, DoorHeight, 0.08f);
-        Tint(door, new Color(0.45f, 0.28f, 0.12f));
-
-        var lightGO = new GameObject("Room_Light");
-        lightGO.transform.SetParent(root, false);
-        lightGO.transform.localPosition = new Vector3(0, H - 0.4f, 0);
-        var l = lightGO.AddComponent<Light>();
-        l.type = LightType.Point;
-        l.range = 14f;
-        l.intensity = 1.4f;
+    GameObject DeskPart(Transform desk, string name, Vector3 position, Vector3 size, Color color)
+    {
+        var part = GameObject.CreatePrimitive(PrimitiveType.Cube); part.name = name;
+        part.transform.SetParent(desk,false); part.transform.localPosition = position;
+        part.transform.localScale = size; Tint(part,color); return part;
     }
 
     Transform BuildDesk()
     {
-        var desk = new GameObject("Desk").transform;
-        desk.SetParent(root, false);
-
-        Color wood = new Color(0.40f, 0.26f, 0.14f);
-        float topThick = 0.1f;
-        float sizeX = 2.0f, sizeZ = 1.0f, legT = 0.08f;
-
-        var top = Box("Desk_Top", new Vector3(0, deskTopHeight + topThick / 2, 0), new Vector3(sizeX, topThick, sizeZ), wood);
-        top.transform.SetParent(desk, true);
-
-        float lx = sizeX / 2 - legT / 2, lz = sizeZ / 2 - legT / 2;
-        int i = 0;
-        foreach (float sx in new[] { -1f, 1f })
-            foreach (float sz in new[] { -1f, 1f })
-            {
-                var leg = Box("Desk_Leg_" + (++i), new Vector3(sx * lx, deskTopHeight / 2, sz * lz),
-                              new Vector3(legT, deskTopHeight, legT), wood);
-                leg.transform.SetParent(desk, true);
-            }
+        var desk = new GameObject("Desk").transform; desk.SetParent(root,false);
+        const float width=2f, depth=1.2f, leg=.08f;
+        var wood = new Color(.62f,.40f,.20f);
+        DeskPart(desk,"Desk_Top",new Vector3(0,deskTopHeight+.05f,0),new Vector3(width,.1f,depth),wood);
+        foreach (float x in new[] {-1f,1f}) foreach (float z in new[] {-1f,1f})
+            DeskPart(desk,"Desk_Leg",new Vector3(x*(width-leg)/2,deskTopHeight/2,z*(depth-leg)/2),
+                new Vector3(leg,deskTopHeight,leg),wood);
+        Physics.SyncTransforms();
+        // Derive placement from the actual generated east wall, including any configured room size.
+        desk.position = new Vector3(eastWall.bounds.min.x-depth/2-.3f,0,0);
+        desk.rotation = Quaternion.Euler(0,90,0);
+        level.SetDeskPosition(desk.position,desk.position.x-depth/2);
         return desk;
+    }
+
+    void ValidateDesk(Transform desk)
+    {
+        Physics.SyncTransforms();
+        foreach (var part in desk.GetComponentsInChildren<BoxCollider>())
+        {
+            if (part.bounds.max.x > eastWall.bounds.min.x-.25f)
+                Debug.LogError("Desk part/trigger lacks wall clearance: " + part.name);
+            if (Physics.ComputePenetration(part,part.transform.position,part.transform.rotation,
+                eastWall,eastWall.transform.position,eastWall.transform.rotation,out _,out _))
+                Debug.LogError("Desk intersects world-space wall: " + part.name);
+        }
+        var feet = desk.position + Vector3.up*.03f;
+        foreach (var hit in Physics.OverlapCapsule(feet+Vector3.up*.3f,feet+Vector3.up*(playerCtrl.crouchHeight-.3f),
+            .3f,~0,QueryTriggerInteraction.Ignore))
+            if (hit.gameObject != playerCtrl.gameObject) Debug.LogError("Desk crouch access obstructed by " + hit.name);
     }
 
     void BuildFurniture()
     {
-        Color teal = new Color(0.25f, 0.38f, 0.42f);
-        Color wood = new Color(0.55f, 0.40f, 0.25f);
-        Color dark = new Color(0.30f, 0.20f, 0.12f);
-
-        Box("Couch", new Vector3(-1.8f, 0.4f, -2f), new Vector3(2.2f, 0.8f, 0.9f), teal);
-        Box("Couch_Back", new Vector3(-1.8f, 0.95f, -2.3f), new Vector3(2.2f, 0.5f, 0.3f), teal);
-        Box("CoffeeTable", new Vector3(2.5f, 0.225f, -1.5f), new Vector3(1.0f, 0.45f, 0.6f), wood);
-        Box("TV_Stand", new Vector3(-3.5f, 0.25f, 4f), new Vector3(1.4f, 0.5f, 0.5f), dark);
-
-        var frame = Box("PictureFrame", new Vector3(1.5f, 1.7f, 4.97f), new Vector3(0.6f, 0.45f, 0.04f), new Color(0.85f, 0.72f, 0.3f));
-        frameProp = MakeProp(frame, 1f, "Picture frame hit you", 0.5f,
-                             new Vector3(1.5f, 1f, 4.2f), new Vector3(1.6f, 2.5f, 1.6f),
-                             new Vector3(0f, 0f, -0.5f), Vector3.zero);
-
-        var lamp = Shape(PrimitiveType.Sphere, "CeilingLamp", new Vector3(0.3f, 2.55f, 0f), Vector3.one * 0.4f, new Color(1f, 0.95f, 0.6f));
-        lampProp = MakeProp(lamp, 3f, "Falling lamp", 0.6f,
-                            new Vector3(0.3f, 1.5f, 0f), new Vector3(2.6f, 3f, 2.6f),
-                            Vector3.zero, Vector3.zero);
-
-        var shelf = Box("Bookshelf", new Vector3(4.79f, 0.9f, -1f), new Vector3(0.4f, 1.8f, 1.4f), dark);
-        shelfProp = MakeProp(shelf, 50f, "Bookshelf toppled", 0.9f,
-                             new Vector3(3.6f, 1f, -1f), new Vector3(2.0f, 2.5f, 1.6f),
-                             new Vector3(-90f, 0f, 0f), new Vector3(0f, 0f, 60f));
-
-        var pane = Box("WindowPane", new Vector3(-4.97f, 1.6f, 1.5f), new Vector3(0.04f, 1.2f, 2.4f), new Color(0.6f, 0.8f, 0.95f));
-        windowProp = MakeProp(pane, 4f, "Shattering glass", 0.4f,
-                              new Vector3(-4.25f, 1f, 1.5f), new Vector3(1.5f, 2.5f, 3f),
-                              new Vector3(1.2f, 0f, 0f), Vector3.zero);
-
-        var tv = Box("TV", new Vector3(-3.5f, 0.85f, 4f), new Vector3(1.1f, 0.7f, 0.1f), new Color(0.08f, 0.08f, 0.1f));
-        tvProp = MakeProp(tv, 12f, "TV fell on you", 0.6f,
-                          new Vector3(-3.5f, 1f, 3f), new Vector3(2f, 2.5f, 1.6f),
-                          new Vector3(0f, 0f, -6f), new Vector3(-3f, 0f, 0f));
+        Color wood = new Color(.55f,.40f,.25f), dark = new Color(.3f,.2f,.12f);
+        Box("Couch", new Vector3(-3.4f,.4f,-3f), new Vector3(1.6f,.8f,.65f), new Color(.25f,.38f,.42f));
+        Box("TV_Stand", new Vector3(-3.4f,.25f,2.9f), new Vector3(1.4f,.5f,.5f), dark);
+        var entry = Box("EntryCeilingLight", new Vector3(-5,2.55f,-1.65f), new Vector3(.7f,.25f,.7f), Color.yellow);
+        spawnLightProp = MakeProp(entry,5f,"Falling entry light",Vector3.zero,Vector3.zero);
+        spawnLightProp.routeObstacle = false;
+        entry.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezeRotation;
+        var frame = Box("PictureFrame", new Vector3(-5.97f,1.7f,2.7f), new Vector3(.04f,.45f,.6f), wood);
+        frameProp = MakeProp(frame,1f,"Picture frame",new Vector3(.5f,0,0),Vector3.zero);
+        var lamp = Shape(PrimitiveType.Sphere,"CeilingLamp",new Vector3(3,2.55f,-2.7f),Vector3.one*.4f,Color.yellow);
+        lampProp = MakeProp(lamp,3f,"Falling lamp",Vector3.zero,Vector3.zero);
+        shelfProp = BuildBookcase(-1);
+        northShelf = BuildBookcase(1);
+        southCaution = BuildCautionLight(-1);
+        northCaution = BuildCautionLight(1);
+        var pane = Box("WindowPane",new Vector3(-5.97f,1.6f,-2.8f),new Vector3(.04f,1.2f,1.2f),new Color(.6f,.8f,.95f));
+        windowProp = MakeProp(pane,4f,"Falling window pane",new Vector3(1.2f,0,0),Vector3.zero);
+        var tv = Box("TV",new Vector3(-3.4f,.85f,2.9f),new Vector3(1.1f,.7f,.1f),new Color(.08f,.08f,.1f));
+        tvProp = MakeProp(tv,12f,"Falling TV",new Vector3(0,0,6f),new Vector3(3f,0,0));
     }
 
-    FallingProp MakeProp(GameObject go, float mass, string label, float delay,
-                         Vector3 zoneCenter, Vector3 zoneSize, Vector3 impulse, Vector3 torque)
+    FallingProp BuildBookcase(int side)
+    {
+        var wood=new Color(.3f,.2f,.12f);
+        string route=side<0?"South":"North";
+        var shelf=new GameObject(route+"_Bookshelf"); shelf.transform.SetParent(root,false);
+        shelf.transform.localPosition=new Vector3(1,.95f,side*2.325f);
+        // One unscaled rigid body. Both visible sections move together; no static pedestal or joint.
+        var lower=shelf.AddComponent<BoxCollider>(); lower.center=new Vector3(0,-.775f,0);
+        lower.size=new Vector3(1.7f,.35f,.65f);
+        var upper=shelf.AddComponent<BoxCollider>(); upper.center=new Vector3(0,.175f,0);
+        upper.size=new Vector3(1.7f,1.55f,.65f);
+        var model=new GameObject("Bookcase_Model").transform; model.SetParent(shelf.transform,false);
+        DeskPart(model,"Cabinet_Base",new Vector3(0,-.775f,0),lower.size,wood);
+        DeskPart(model,"Bookcase_Upper",new Vector3(0,.175f,0),upper.size,wood);
+        foreach(var collider in model.GetComponentsInChildren<Collider>()) DestroyImmediate(collider);
+        foreach(float y in new[]{-.4f,.2f,.7f}) for(int book=0;book<5;book++)
+        {
+            var spine=DeskPart(model,"Book_Front",new Vector3(-.7f+book*.3f,y,-side*.335f),
+                new Vector3(.24f,.35f,.02f),new Color(.35f+book*.08f,.3f,.2f+book*.06f));
+            DestroyImmediate(spine.GetComponent<Collider>());
+        }
+        var prop=MakeProp(shelf,50,route+" passage bookshelf",new Vector3(0,0,-side*35),new Vector3(-side*12,0,0));
+        prop.pushPointLocal=new Vector3(0,.85f,0);
+        prop.warningVisual=model;
+        var body=shelf.GetComponent<Rigidbody>();
+        body.interpolation=RigidbodyInterpolation.Interpolate;
+        body.solverIterations=12; body.solverVelocityIterations=4;
+        body.maxDepenetrationVelocity=2f;
+        return prop;
+    }
+
+    FallingProp BuildCautionLight(int side)
+    {
+        var light=Box(side<0?"South_Caution_Light":"North_Caution_Light",new Vector3(0,2.55f,side*1.4f),
+            new Vector3(1.2f,.25f,1.2f),new Color(.9f,.85f,.5f));
+        var prop=MakeProp(light,5,"Falling passage light",Vector3.zero,Vector3.zero);
+        prop.routeObstacle=false; light.GetComponent<Rigidbody>().constraints=RigidbodyConstraints.FreezeRotation;
+        return prop;
+    }
+
+    FallingProp MakeProp(GameObject go, float mass, string label,
+                         Vector3 impulse, Vector3 torque)
     {
         var rb = go.AddComponent<Rigidbody>();
         rb.mass = mass;
         var fp = go.AddComponent<FallingProp>();
         fp.label = label;
-        fp.impactDelay = delay;
-        fp.hazardCenter = zoneCenter;
-        fp.hazardSize = zoneSize;
         fp.pushImpulse = impulse;
         fp.torqueImpulse = torque;
         return fp;
@@ -167,8 +213,8 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     void BuildPlayer()
     {
         var player = new GameObject("Player");
-        player.transform.position = new Vector3(-3.5f, 0.1f, -3.5f);
-        player.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
+        player.transform.position = Level1Configuration.SpawnPosition + Vector3.up * .1f;
+        player.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
 
         var cc = player.AddComponent<CharacterController>();
         cc.radius = 0.3f;
@@ -197,6 +243,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         var fpc = player.AddComponent<FirstPersonCrouchController>();
         fpc.cameraPivot = pivot.transform;
         fpc.bodyVisual = body.transform;
+        fpc.allowJump = level.allowJump; fpc.walkSpeed = level.walkSpeed; fpc.crouchSpeed = level.crouchSpeed;
         playerCtrl = fpc;
         playerCam = cam;
     }
@@ -209,7 +256,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
 
         var box = zone.AddComponent<BoxCollider>();
         box.isTrigger = true;
-        box.size = new Vector3(1.6f, deskTopHeight, 0.7f);
+        box.size = new Vector3(1.84f, deskTopHeight, 1.04f);
 
         var rb = zone.AddComponent<Rigidbody>();
         rb.isKinematic = true;
@@ -217,11 +264,13 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         var sz = zone.AddComponent<SafeZoneTrigger>();
         sz.objectiveText = objective;
         safeZone = sz;
+        ValidateDesk(desk);
     }
 
     void BuildFeedback()
     {
         var fb = new GameObject("Feedback").AddComponent<SafeFeedback>();
+        safeFeedback = fb;
         fb.objectiveText = objectiveText;
         fb.stanceText = stanceText;
         fb.vignette = vignette;
@@ -249,6 +298,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     {
         var go = new GameObject("EarthquakeDirector");
         director = go.AddComponent<EarthquakeDirector>();
+        director.feedback = safeFeedback;
         director.player = playerCtrl;
         director.shake = shake;
         director.shelter = safeZone;
@@ -256,29 +306,15 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         director.resultTitle = resultTitle;
         director.resultBody = resultBody;
 
-        director.Schedule(13f, () => frameProp.Trigger(director));
-        director.Schedule(20f, () => lampProp.Trigger(director));
-        director.Schedule(23f, () => shelfProp.Trigger(director));
-        director.Schedule(25f, () => windowProp.Trigger(director));
-        director.Schedule(27f, () => tvProp.Trigger(director));
-
-        float zFront = roomDepth / 2 + wallThickness / 2;
-        var plug = new GameObject("Doorway_Blocker");
-        plug.transform.SetParent(root, false);
-        plug.transform.localPosition = new Vector3(DoorCenterX, DoorHeight / 2f, zFront);
-        plug.AddComponent<BoxCollider>().size = new Vector3(DoorWidth, DoorHeight, wallThickness);
-
-        var trig = new GameObject("Doorway_Hazard");
-        trig.transform.SetParent(root, false);
-        trig.transform.localPosition = new Vector3(DoorCenterX + 0.1f, DoorHeight / 2f, roomDepth / 2 - 0.4f);
-        var tc = trig.AddComponent<BoxCollider>();
-        tc.isTrigger = true;
-        tc.size = new Vector3(1.0f, DoorHeight, 0.8f);
-        var trb = trig.AddComponent<Rigidbody>();
-        trb.isKinematic = true;
-        var dh = trig.AddComponent<DoorwayHazard>();
-        dh.director = director;
-        dh.returnPosition = new Vector3(DoorCenterX + 0.1f, 0.1f, roomDepth / 2 - 1.8f);
+        director.quakeStart = level.explorationSeconds;
+        director.quakeEnd = level.explorationSeconds + level.shakingSeconds;
+        var hazards = go.AddComponent<HazardScheduler>();
+        hazards.director = director;
+        director.hazards = hazards;
+        hazards.configuration = level;
+        hazards.props = new[] { frameProp, lampProp, shelfProp, windowProp, tvProp, spawnLightProp, northShelf, southCaution, northCaution };
+        level.AuthorHazards(hazards.props);
+        level.ValidateRoutes(playerCtrl);
     }
 
     void BuildPause()
@@ -315,9 +351,10 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         Sprite vig = MakeVignetteSprite();
         vignette = MakeFullscreenImage(ct, "SafeVignette", vig, new Color(0.3f, 1f, 0.45f, 0f));
 
-        objectiveText = MakeText(ct, "ObjectiveText", font, 44, TextAnchor.UpperCenter,
-                                 new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(1400, 80));
+        objectiveText = MakeText(ct, "ObjectiveText", font, 32, TextAnchor.UpperCenter,
+                                 new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(1100, 70));
         objectiveText.fontStyle = FontStyle.Bold;
+        objectiveText.horizontalOverflow = HorizontalWrapMode.Wrap;
 
         stanceText = MakeText(ct, "StanceText", font, 30, TextAnchor.LowerCenter,
                               new Vector2(0.5f, 0f), new Vector2(0f, 25f), new Vector2(900, 50));
@@ -328,6 +365,8 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         resultTitle.fontStyle = FontStyle.Bold;
         resultBody = MakeText(resultPanel.transform, "ResultBody", font, 32, TextAnchor.MiddleCenter,
                               new Vector2(0.5f, 0.5f), new Vector2(0f, -50f), new Vector2(1600, 700));
+        MakeButton(resultPanel.transform, "Retry Level", font, new Vector2(-250f, -430f)).onClick.AddListener(GameFlow.Retry);
+        MakeButton(resultPanel.transform, "Main Menu", font, new Vector2(250f, -430f)).onClick.AddListener(GameFlow.MainMenu);
         resultPanel.SetActive(false);
 
         pausePanel = MakePanel(ct, "PausePanel", new Color(0, 0, 0, 0.72f));
@@ -341,13 +380,25 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         
         Text hint = MakeText(pausePanel.transform, "ControlsHint", font, 24, TextAnchor.MiddleCenter,
                              new Vector2(0.5f, 0f), new Vector2(0f, 40f), new Vector2(1400, 40));
-        hint.text = "WASD: move   Space: jump   Mouse: look   C / Ctrl: crouch   Esc: pause";
+        hint.text = Level1Configuration.MovementHint + (level.allowJump ? "   Space: jump" : "") + "   C / Ctrl: crouch   Esc: pause";
         hint.color = new Color(1, 1, 1, 0.75f);
         
+        MakeButton(pausePanel.transform, "Settings", font, new Vector2(0,-240)).onClick.AddListener(() => OverlayMenus.Settings(pausePanel));
+        MakeButton(pausePanel.transform, "How to play", font, new Vector2(0,-350)).onClick.AddListener(() => OverlayMenus.Help(pausePanel));
+        var help = MakeButton(ct, "How to play (H)", font, Vector2.zero);
+        var helpRect = help.GetComponent<RectTransform>();
+        helpRect.anchorMin = helpRect.anchorMax = new Vector2(1,1);
+        helpRect.anchoredPosition = new Vector2(-160,-105);
+        helpRect.sizeDelta = new Vector2(280,60);
+        var helpLabel = help.GetComponentInChildren<Text>();
+        helpLabel.fontSize = 28; helpLabel.rectTransform.sizeDelta = new Vector2(280,60);
+        help.onClick.AddListener(() => OverlayMenus.Help());
+        var overlay = canvasGO.AddComponent<OverlayMenus>();
+        overlay.Initialize(font);
         pausePanel.SetActive(false);
     }
 
-    static GameObject MakePanel(Transform parent, string name, Color color)
+    public static GameObject MakePanel(Transform parent, string name, Color color)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
@@ -360,7 +411,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         return go;
     }
 
-    static Button MakeButton(Transform parent, string label, Font font, Vector2 pos)
+    public static Button MakeButton(Transform parent, string label, Font font, Vector2 pos)
     {
         var go = new GameObject(label + "Button");
         go.transform.SetParent(parent, false);
@@ -400,7 +451,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         return img;
     }
 
-    static Text MakeText(Transform parent, string name, Font font, int size, TextAnchor align,
+    public static Text MakeText(Transform parent, string name, Font font, int size, TextAnchor align,
                          Vector2 anchor, Vector2 pos, Vector2 dims)
     {
         var go = new GameObject(name);

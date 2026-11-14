@@ -1,0 +1,15 @@
+Unity 2023.1.22f1 headless Edit Mode physics checks
+Native Physics.Simulate and CharacterController.Move; no input-driven gameplay/listening.
+
+PASS initial routes and desk: seed=1701
+Actual shelf seed=1701 route=0 bounds=Center: (1.00, 0.80, -1.23), Extents: (0.85, 0.35, 0.78) rotation=(90.00, 0.00, 0.00)
+PASS physical obstruction, no-jump alternate and restart rebuild: seed=1701
+PASS initial routes and desk: seed=7
+Actual shelf seed=7 route=0 bounds=Center: (1.00, 0.80, -1.22), Extents: (0.85, 0.35, 0.78) rotation=(90.00, 0.01, 0.00)
+PASS physical obstruction, no-jump alternate and restart rebuild: seed=7
+PASS initial routes and desk: seed=42
+Actual shelf seed=42 route=1 bounds=Center: (1.00, 0.80, 1.22), Extents: (0.85, 0.35, 0.78) rotation=(270.02, 0.00, 0.00)
+PASS physical obstruction, no-jump alternate and restart rebuild: seed=42
+
+Three scene-object rebuilds, not three menu-driven SceneManager restarts.
+No interactive difficulty claim.

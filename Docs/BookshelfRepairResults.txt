@@ -1,0 +1,56 @@
+BASELINE before assembly changes
+BASELINE South_Bookshelf pivot=(1.00, 0.45, -2.00) connected=(1.00, 0.45, -2.00) axis=(1.00, 0.00, 0.00) limits=0,90 force=(0.00, 0.00, 85.00) torque=(40.00, 0.00, 0.00)
+BASELINE FINAL South_Bookshelf minY=0.4499997 maxSpeed=3.422182 maxStep=0.06843717 minBottom=0.4493783 joints=1
+BASELINE North_Bookshelf pivot=(1.00, 0.45, 2.00) connected=(1.00, 0.45, 2.00) axis=(-1.00, 0.00, 0.00) limits=0,90 force=(0.00, 0.00, -85.00) torque=(-40.00, 0.00, 0.00)
+BASELINE FINAL North_Bookshelf minY=0.4494677 maxSpeed=3.353143 maxStep=0.0670587 minBottom=0.4494675 joints=1
+
+ISOLATED REPAIR / EXISTING PHYSICS TESTS
+REPAIR South_Bookshelf bounds=Center: (1.00, 0.79, -1.37), Extents: (0.85, 0.79, 0.97) rotation=(56.70, 0.01, 0.02) minY=-0.0001155138 maxSpeed=1.823776 maxStep=0.03648701 minBottom=-0.0001162291 settled=True
+PASS isolated grounded rigid assembly South_Bookshelf
+REPAIR North_Bookshelf bounds=Center: (1.00, 0.79, 1.37), Extents: (0.85, 0.79, 0.97) rotation=(303.35, 0.00, 0.00) minY=6.330013E-05 maxSpeed=1.821444 maxStep=0.03644031 minBottom=5.567074E-05 settled=True
+PASS isolated grounded rigid assembly North_Bookshelf
+PASS initial routes and desk: seed=1701
+Actual shelf seed=1701 route=0 bounds=Center: (1.00, 0.79, -1.37), Extents: (0.85, 0.79, 0.97) rotation=(56.70, 0.01, 0.02)
+PASS physical obstruction, no-jump alternate and restart rebuild: seed=1701
+PASS initial routes and desk: seed=7
+Actual shelf seed=7 route=0 bounds=Center: (1.00, 0.79, -1.37), Extents: (0.85, 0.79, 0.97) rotation=(56.70, 0.01, 0.02)
+PASS physical obstruction, no-jump alternate and restart rebuild: seed=7
+PASS initial routes and desk: seed=42
+Actual shelf seed=42 route=1 bounds=Center: (1.00, 0.79, 1.37), Extents: (0.85, 0.79, 0.97) rotation=(303.35, 0.00, 0.00)
+PASS physical obstruction, no-jump alternate and restart rebuild: seed=42
+
+AUTOMATED PLAY MODE (8x time; scripted sheltered player, not visual gameplay)
+Level 1 seed=1701 opening route=south
+PASS CALM no warning/motion seed=1701 onset=2.502289
+Hazard committed: South passage bookshelf at 3.25
+PASS pause/resume warning seed=1701
+PASS pause/resume fall seed=1701
+PASS pause/resume impact seed=1701
+PASS pause/resume settled seed=1701
+PASS ROUND STAGES seed=1701 shelf=South_Bookshelf impact=True floor=0.0003213882
+Hazard committed: Falling passage light at 9.63
+Hazard committed: Falling lamp at 15.05
+Hazard committed: Falling TV at 21.33
+Hazard committed: Falling passage light at 27.79
+Hazard committed: Falling window pane at 33.60
+PASS full survival round seed=1701 ended=37.57986
+Level 1 seed=1701 opening route=south
+PASS retry and Main Menu reset seed=1701
+Level 1 seed=42 opening route=north
+PASS CALM no warning/motion seed=42 onset=2.600095
+Hazard committed: North passage bookshelf at 3.51
+PASS pause/resume warning seed=42
+PASS pause/resume fall seed=42
+PASS pause/resume impact seed=42
+PASS pause/resume settled seed=42
+PASS ROUND STAGES seed=42 shelf=North_Bookshelf impact=True floor=1.227856E-05
+Hazard committed: Falling passage light at 9.85
+Hazard committed: Falling lamp at 15.96
+Hazard committed: Falling window pane at 22.53
+Hazard committed: Falling TV at 28.91
+Hazard committed: Picture frame at 34.56
+PASS full survival round seed=42 ended=37.52465
+Level 1 seed=42 opening route=north
+PASS retry and Main Menu reset seed=42
+PASS max boundary penetration=0.0009278357
+PASS ALL automated Play Mode round sequences (headless, not visual gameplay)

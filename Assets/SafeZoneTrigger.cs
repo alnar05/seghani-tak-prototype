@@ -27,25 +27,23 @@ public class SafeZoneTrigger : MonoBehaviour
 
     void Start() => Refresh();
 
-    void OnTriggerStay(Collider other)
+    // Sample directly after movement and at impacts; do not depend on stale trigger callbacks.
+    public void Evaluate(FirstPersonCrouchController player)
     {
-        var player = other.GetComponent<FirstPersonCrouchController>();
-        if (!player) return;
-
-        Vector3 p = player.transform.position;
-        p.y = box.bounds.center.y;
-        bool inside = box.bounds.Contains(p);
-
-        PlayerInside = inside;
-        if (!listening) return;
-        SetSafe(player.IsCrouching && inside);
+        var controller = player.GetComponent<CharacterController>();
+        // Require the complete capsule bounds to fit inside the leg-to-leg usable space.
+        Bounds body = controller.bounds, bounds = box.bounds;
+        PlayerInside = bounds.Contains(body.min + Vector3.one*.005f) &&
+                       bounds.Contains(body.max - Vector3.one*.005f);
+        SetSafe(listening && player.IsCrouching && PlayerInside);
     }
 
-    void OnTriggerExit(Collider other)
+    public void Clear()
     {
-        if (!other.GetComponent<FirstPersonCrouchController>()) return;
+        listening = false;
         PlayerInside = false;
-        if (listening) SetSafe(false);
+        SetSafe(false);
+        if (objectiveText) objectiveText.text = "";
     }
 
     void SetSafe(bool safe)

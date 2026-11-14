@@ -13,6 +13,7 @@ public class FirstPersonCrouchController : MonoBehaviour
     public float speedMultiplier = 1f;
     public float swayStrength = 0f;
 
+    public bool allowJump = true;
     public float jumpHeight = 0.8f;
     public float coyoteTime = 0.1f;
     public float groundCheckDistance = 0.25f;
@@ -54,6 +55,12 @@ public class FirstPersonCrouchController : MonoBehaviour
 
         HandleCrouch();
         HandleMovement();
+    }
+
+    void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        var prop = hit.collider.GetComponent<FallingProp>();
+        if (prop) prop.HitController(hit);
     }
 
     void HandleLook()
@@ -142,7 +149,7 @@ public class FirstPersonCrouchController : MonoBehaviour
 
         if (IsGrounded && verticalVelocity < 0f) verticalVelocity = -2f;
 
-        if (Input.GetKeyDown(KeyCode.Space) && coyoteTimer > 0f && !IsCrouching)
+        if (allowJump && Input.GetKeyDown(KeyCode.Space) && coyoteTimer > 0f && !IsCrouching)
         {
             verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
             coyoteTimer = 0f;

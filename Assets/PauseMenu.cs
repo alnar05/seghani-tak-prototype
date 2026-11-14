@@ -23,6 +23,8 @@ public class PauseMenu : MonoBehaviour
     {
         if (director && director.CurrentPhase == EarthquakeDirector.Phase.Ended) return;
 
+        if (OverlayMenus.BlocksPause) return;
+
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (IsPaused) ResumeGame();
@@ -32,16 +34,23 @@ public class PauseMenu : MonoBehaviour
 
     public void PauseGame()
     {
+        if (director && director.CurrentPhase == EarthquakeDirector.Phase.Ended) return;
         IsPaused = true;
         Time.timeScale = 0f;
         AudioListener.pause = true;
-        if (panel) panel.SetActive(true);
+        if (panel)
+        {
+            panel.SetActive(true);
+            var first = panel.GetComponentInChildren<UnityEngine.UI.Selectable>();
+            if (first) first.Select();
+        }
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
     }
 
     public void ResumeGame()
     {
+        if (director && director.CurrentPhase == EarthquakeDirector.Phase.Ended) return;
         IsPaused = false;
         Time.timeScale = 1f;
         AudioListener.pause = false;
@@ -54,7 +63,7 @@ public class PauseMenu : MonoBehaviour
     {
         Time.timeScale = 1f;
         AudioListener.pause = false;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        GameFlow.Retry();
     }
 
     public void QuitGame()

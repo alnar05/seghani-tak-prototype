@@ -18,6 +18,7 @@ public class SafeFeedback : MonoBehaviour
     float vignetteAlpha;
     float fovKick, baseFov = 75f;
     string lastStance = "";
+    float lastSound = -1f;
 
     static readonly Color VignetteGreen = new Color(0.3f, 1f, 0.45f, 0f);
     static readonly Color Warning = new Color(1f, 0.65f, 0.25f);
@@ -26,6 +27,7 @@ public class SafeFeedback : MonoBehaviour
     {
         audioSrc = gameObject.AddComponent<AudioSource>();
         audioSrc.spatialBlend = 0f;
+        GameAudio.Bind(audioSrc, GameAudio.Bus.Feedback);
 
         chime = MakeTone("SafeChime", new[] { 523.25f, 659.25f, 783.99f }, 0.09f, 0.9f, 0.28f, 5f);
         bump = MakeTone("Bump", new[] { 85f }, 0f, 0.2f, 0.5f, 18f);
@@ -44,7 +46,8 @@ public class SafeFeedback : MonoBehaviour
         popT = 0f;
         if (!safe) return;
 
-        audioSrc.PlayOneShot(chime);
+        if (Time.unscaledTime - lastSound > .3f)
+        { audioSrc.PlayOneShot(chime); lastSound = Time.unscaledTime; }
         vignetteAlpha = 0.7f;
         fovKick = 6f;
 
@@ -53,6 +56,18 @@ public class SafeFeedback : MonoBehaviour
             burst.transform.position = player.transform.position + Vector3.up * 0.5f;
             burst.Emit(40);
         }
+    }
+
+    public void Clear()
+    {
+        GameAudio.FadeOut(audioSrc);
+        if (burst) burst.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        if (vignette) vignette.color = VignetteGreen;
+        if (cam) cam.fieldOfView = baseFov;
+        if (objectiveText) objectiveText.rectTransform.localScale = Vector3.one;
+        if (stanceText) stanceText.text = "";
+        vignetteAlpha = fovKick = 0f;
+        enabled = false;
     }
 
     void Update()
@@ -76,7 +91,7 @@ public class SafeFeedback : MonoBehaviour
         if (cam)
         {
             fovKick = Mathf.Lerp(fovKick, 0f, Time.deltaTime * 6f);
-            cam.fieldOfView = baseFov - fovKick;
+            cam.fieldOfView = baseFov - fovKick * GameAudio.Shake;
         }
 
         if (stanceText && player)
@@ -90,7 +105,8 @@ public class SafeFeedback : MonoBehaviour
                 stanceText.text = stance;
                 lastStance = stance;
                 stancePopT = 0f;
-                if (blocked) audioSrc.PlayOneShot(bump);
+                if (blocked && Time.unscaledTime - lastSound > .3f)
+                { audioSrc.PlayOneShot(bump); lastSound = Time.unscaledTime; }
             }
             stanceText.color = blocked ? Warning : new Color(1f, 1f, 1f, 0.85f);
 
@@ -118,6 +134,16 @@ public class SafeFeedback : MonoBehaviour
             }
         }
 
+        float peak = 0;
+        for (int i = 0; i < n; i++)
+        {
+            // Smooth both edges, including loop seams; preserve headroom for mixed sources.
+            float envelope = Mathf.Min(1f, Mathf.Min(i, n - 1 - i) / (sampleRate * .025f));
+            data[i] *= envelope;
+            peak = Mathf.Max(peak, Mathf.Abs(data[i]));
+        }
+        float gain = peak > .6f ? .6f / peak : 1f;
+        for (int i = 0; i < n; i++) data[i] *= gain;
         var clip = AudioClip.Create(name, n, 1, sampleRate, false);
         clip.SetData(data, 0);
         return clip;

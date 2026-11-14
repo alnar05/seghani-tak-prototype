@@ -3,18 +3,25 @@ using UnityEngine;
 public class CameraShake : MonoBehaviour
 {
     [Range(0f, 1f)] public float intensity;
-    public float maxAngle = 2.5f;
-    public float maxOffset = 0.04f;
-    public float frequency = 14f;
+    public float maxAngle = .8f;
+    public float maxOffset = 0.02f;
+    public float frequency = 10f;
 
     float kick;
 
     public void Kick(float amount) => kick = Mathf.Max(kick, amount);
 
+    public void ResetShake()
+    {
+        intensity = kick = 0f;
+        transform.localRotation = Quaternion.identity;
+        transform.localPosition = Vector3.zero;
+    }
+
     void LateUpdate()
     {
         kick = Mathf.MoveTowards(kick, 0f, Time.deltaTime * 2.5f);
-        float a = Mathf.Clamp01(intensity + kick);
+        float a = Mathf.Clamp01(intensity + kick) * GameAudio.Shake;
 
         float t = Time.time * frequency;
         float nx = Mathf.PerlinNoise(t, 0.1f) - 0.5f;
@@ -23,7 +30,7 @@ public class CameraShake : MonoBehaviour
 
         transform.localRotation = Quaternion.Euler(nx * 2f * maxAngle * a,
                                                    ny * 2f * maxAngle * a,
-                                                   nz * 3f * maxAngle * a);
+                                                   nz * 1.5f * maxAngle * a);
         transform.localPosition = new Vector3(ny, nx, 0f) * 2f * maxOffset * a;
     }
 }
