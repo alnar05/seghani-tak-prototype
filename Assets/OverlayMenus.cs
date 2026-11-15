@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
-using System.Collections;
 
 // Modal screens restore the exact caller state: gameplay, pause menu, or main menu.
 public class OverlayMenus : MonoBehaviour
@@ -10,7 +9,8 @@ public class OverlayMenus : MonoBehaviour
     static OverlayMenus instance;
     static int consumedFrame = -1;
     public static bool BlocksPause => (instance && instance.open) || consumedFrame == Time.frameCount;
-    GameObject screen, caller;
+    GameObject screen, caller, hud;
+    bool savedHud;
     GameObject previousSelection;
     Font font;
     float savedTime;
@@ -18,8 +18,6 @@ public class OverlayMenus : MonoBehaviour
     CursorLockMode savedLock;
     bool open;
     readonly List<Selectable> navigation = new List<Selectable>();
-    AudioSource previewSource;
-    GameAudio.Bus previewBus;
     bool settings;
 
     public void Initialize(Font uiFont) { instance = this; font = uiFont; }
@@ -42,6 +40,9 @@ public class OverlayMenus : MonoBehaviour
         Time.timeScale = 0f; AudioListener.pause = true;
         Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
         if (caller) caller.SetActive(false);
+        var pause = FindFirstObjectByType<PauseMenu>();
+        hud = pause ? pause.hud : null;
+        if (hud) { savedHud = hud.activeSelf; hud.SetActive(false); }
         Build();
     }
 
@@ -52,25 +53,15 @@ public class OverlayMenus : MonoBehaviour
         TextAt(settings ? "SETTINGS" : "HOW TO PLAY", 440, 52, 100);
         if (settings)
         {
-            AddSlider("Master volume", GameAudio.MasterKey, GameAudio.Master, 330);
-            int row = 0;
-            foreach (GameAudio.Bus bus in System.Enum.GetValues(typeof(GameAudio.Bus)))
-                AddSlider(bus + " volume", GameAudio.Key(bus), GameAudio.Category(bus), 250 - 80 * row++);
-            AddSlider("Camera Shake (0 = off)", "camera.shake", GameAudio.Shake, -70);
-            AddButton(GameAudio.Muted ? "Unmute" : "Mute", -170, -260, () => {
-                PlayerPrefs.SetInt("audio.mute", GameAudio.Muted ? 0 : 1); PlayerPrefs.Save(); Rebuild(); });
-            AddButton("Preview: " + previewBus, -170, 260, () => {
-                previewBus = (GameAudio.Bus)(((int)previewBus + 1) % 4); Rebuild(); });
-            AddButton("Play preview", -270, -260, Preview);
-            AddButton("Reset audio", -270, 260, () => { GameAudio.ResetAudio(); Rebuild(); });
-            TextAt("Previews use your current volumes and mute setting.", -345, 24, 50);
+            AddSlider("Master Volume", GameAudio.MasterKey, GameAudio.Master, 150);
+            AddSlider("Camera Shake", "camera.shake", GameAudio.Shake, -10);
         }
         else
         {
-            TextAt("Survive until the earthquake stops", 320, 36, 70);
-            var player = FindFirstObjectByType<FirstPersonCrouchController>();
-            bool jumping = player ? player.allowJump : new Level1Configuration().allowJump;
-            TextAt(EarthquakeDirector.Briefing + "\n\n" + Level1Configuration.MovementHint + (jumping ? "   Space: jump" : "") + "\nC / Ctrl: crouch   Esc: pause   H: instructions\n\nWatch pulsing floor warnings and listen for furniture creaks.\nMove away before it falls. Fallen furniture can change your route.\n\nYou win by staying alive. Leaving cover is allowed.\nOnly dangerous physical impacts cause injury.\n\nUse arrow keys / Tab to select; Enter / Space to activate.", 30, 30, 500);
+            HelpCard("Goal", "SURVIVE", EarthquakeDirector.Briefing, -420, 170);
+            HelpCard("Movement", "W A S D  /  ARROWS", "Move • Mouse to look • Esc to pause", 420, 170);
+            HelpCard("Take Cover", "C  /  CTRL", "Hold to crouch under the sturdy desk.\nStay under it for protection.", -420, -100);
+            HelpCard("Watch for Hazards", "!  →  WAIT / MOVE", "Listen for creaking and watch for movement.\nStop or retreat before an object falls.\nCheck the debris before continuing.", 420, -100);
         }
         AddButton("Back", -400, 0, Close);
         for (int i = 0; i < navigation.Count; i++)
@@ -96,46 +87,56 @@ public class OverlayMenus : MonoBehaviour
         var button = SeghaniTakSceneBuilder.MakeButton(screen.transform, label, font, new Vector2(x,y));
         button.onClick.AddListener(action); navigation.Add(button);
     }
-    void Rebuild()
+    void HelpCard(string title, string icon, string body, float x, float y)
     {
-        int index = navigation.FindIndex(s => s.gameObject == EventSystem.current.currentSelectedGameObject);
-        screen.SetActive(false); Destroy(screen); Build();
-        if (index >= 0 && index < navigation.Count) navigation[index].Select();
+        var card = SeghaniTakSceneBuilder.MakePanel(screen.transform, title, new Color(.12f,.18f,.2f));
+        var rect = card.GetComponent<RectTransform>();
+        rect.anchorMin = rect.anchorMax = new Vector2(.5f,.5f);
+        rect.sizeDelta = new Vector2(780,240); rect.anchoredPosition = new Vector2(x,y);
+        var heading = SeghaniTakSceneBuilder.MakeText(card.transform,"Heading",font,32,TextAnchor.MiddleLeft,
+            new Vector2(.5f,.5f),new Vector2(0,82),new Vector2(700,45));
+        heading.text = title; heading.fontStyle = FontStyle.Bold;
+        if (title == "Take Cover")
+        {
+            IconBar(card.transform,new Vector2(285,91),new Vector2(100,9));
+            IconBar(card.transform,new Vector2(244,64),new Vector2(8,48));
+            IconBar(card.transform,new Vector2(326,64),new Vector2(8,48));
+            IconBar(card.transform,new Vector2(281,55),new Vector2(32,20));
+        }
+        else if (title == "Watch for Hazards")
+        {
+            var sign=SeghaniTakSceneBuilder.MakeText(card.transform,"Warning sign",font,50,TextAnchor.MiddleCenter,
+                new Vector2(.5f,.5f),new Vector2(300,77),new Vector2(70,65));
+            sign.text="!"; sign.color=new Color(1f,.8f,.35f);
+        }
+        var keys = SeghaniTakSceneBuilder.MakeText(card.transform,"Control icon",font,26,TextAnchor.MiddleLeft,
+            new Vector2(.5f,.5f),new Vector2(0,33),new Vector2(700,45));
+        keys.text=icon; keys.color=new Color(.7f,.9f,.77f);
+        var text = SeghaniTakSceneBuilder.MakeText(card.transform,"Instruction",font,27,TextAnchor.UpperLeft,
+            new Vector2(.5f,.5f),new Vector2(0,-48),new Vector2(700,100));
+        text.text=body; text.horizontalOverflow=HorizontalWrapMode.Wrap;
     }
 
-    void Preview()
+    void IconBar(Transform parent, Vector2 position, Vector2 size)
     {
-        if (!previewSource)
-        {
-            var go = new GameObject("Settings audio preview"); go.transform.SetParent(transform);
-            previewSource = go.AddComponent<AudioSource>();
-        }
-        // Separate source per category avoids retaining another category's gain component.
-        foreach (var gain in previewSource.GetComponents<GameAudio>()) { gain.enabled = false; Destroy(gain); }
-        var controller = GameAudio.Bind(previewSource, previewBus); controller.preview = true;
-        previewSource.spatialBlend = 0f;
-        previewSource.clip = previewBus == GameAudio.Bus.Earthquake ? EarthquakeDirector.MakeRumble() :
-            SafeFeedback.MakeTone("Preview " + previewBus,
-                previewBus == GameAudio.Bus.Warning ? new[] {260f,340f} :
-                previewBus == GameAudio.Bus.Impact ? new[] {70f,110f,45f} : new[] {523.25f,659.25f,783.99f},
-                .08f, .8f, .4f, 5f);
-        previewSource.Play();
-        GameAudio.LogDiagnostics();
+        var bar = new GameObject("Shelter illustration",typeof(RectTransform),typeof(Image));
+        bar.transform.SetParent(parent,false);
+        var image=bar.GetComponent<Image>(); image.color=new Color(.7f,.9f,.77f); image.raycastTarget=false;
+        var rect=bar.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=new Vector2(.5f,.5f);
+        rect.anchoredPosition=position;rect.sizeDelta=size;
     }
+
     public void Close()
     {
         if (!open) return;
         consumedFrame = Time.frameCount;
-        if (previewSource) { GameAudio.FadeOut(previewSource); StartCoroutine(RetirePreview(previewSource.gameObject)); previewSource = null; }
         screen.SetActive(false); Destroy(screen); open = false;
         if (caller) caller.SetActive(true);
+        if (hud) hud.SetActive(savedHud);
         Time.timeScale = savedTime; AudioListener.pause = savedAudio;
         Cursor.lockState = savedLock; Cursor.visible = savedCursor;
         if (EventSystem.current) EventSystem.current.SetSelectedGameObject(previousSelection);
     }
-    IEnumerator RetirePreview(GameObject go)
-    { yield return new WaitForSecondsRealtime(.25f); if (go) Destroy(go); }
-
     void Update()
     {
         if (open)

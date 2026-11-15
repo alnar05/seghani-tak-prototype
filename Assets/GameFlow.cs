@@ -50,6 +50,7 @@ public class GameFlow : MonoBehaviour
         var scaler = canvas.gameObject.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.matchWidthOrHeight = .5f;
         if (!EventSystem.current)
         {
             var events = new GameObject("EventSystem");
@@ -57,13 +58,13 @@ public class GameFlow : MonoBehaviour
             events.AddComponent<StandaloneInputModule>();
         }
         Font font = Font.CreateDynamicFontFromOSFont("Arial", 36);
-        var menu = SeghaniTakSceneBuilder.MakePanel(canvas.transform, "Main Menu", new Color(.08f, .10f, .13f));
-        var select = SeghaniTakSceneBuilder.MakePanel(canvas.transform, "Level Select", new Color(.08f, .10f, .13f));
+        var menu = SeghaniTakSceneBuilder.MakePanel(canvas.transform, "Main Menu", new Color(.025f,.045f,.05f,.78f));
+        var select = SeghaniTakSceneBuilder.MakePanel(canvas.transform, "Level Select", new Color(.025f,.045f,.05f,.78f));
         Title(menu.transform, font, "EARTHQUAKE SURVIVAL");
         Title(select.transform, font, "LEVEL SELECT");
         var goal = SeghaniTakSceneBuilder.MakeText(menu.transform, "Goal", font, 30, TextAnchor.MiddleCenter,
             new Vector2(.5f,.5f), new Vector2(0,200), new Vector2(1400,60));
-        goal.text = "Goal: survive until the earthquake stops.";
+        goal.text = "Goal: be alive and crouched fully under the desk when the countdown ends.";
         var overlay = canvas.gameObject.AddComponent<OverlayMenus>();
         overlay.Initialize(font);
         Button(menu.transform, font, "Play", 100).onClick.AddListener(PlayLevel1);
@@ -76,8 +77,18 @@ public class GameFlow : MonoBehaviour
         Button(select.transform, font, "Level 3 - Unavailable", -120).interactable = false;
         Button(select.transform, font, "Back", -230).onClick.AddListener(() => { select.SetActive(false); menu.SetActive(true); Focus(menu); });
 
+        menu.AddComponent<MenuNavigation>();
+        select.AddComponent<MenuNavigation>();
+        levelSelect = select; mainPanel = menu;
         select.SetActive(false);
         EventSystem.current.SetSelectedGameObject(menu.GetComponentInChildren<Button>().gameObject);
+    }
+
+    GameObject levelSelect, mainPanel;
+    void Update()
+    {
+        if (!OverlayMenus.BlocksPause && Input.GetKeyDown(KeyCode.Escape) && levelSelect.activeSelf)
+        { levelSelect.SetActive(false); mainPanel.SetActive(true); Focus(mainPanel); }
     }
 
     static void Focus(GameObject panel) => panel.GetComponentInChildren<Button>().Select();

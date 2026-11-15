@@ -4,16 +4,21 @@ using UnityEngine;
 public class Level1Configuration
 {
     public Vector3 roomSize = new Vector3(12, 3, 7);
-    public float explorationSeconds = 2.5f;
-    public float shakingSeconds = 35f;
+    public float explorationSeconds = .8f;
+    public float shakingSeconds = 15f;
     public int seed = 1701;
     public float warningSeconds = 3f;
     public float openingWarningSeconds = 2.75f;
-    public float openingDelayAfterOnset = .75f;
+    public float openingDelayAfterOnset = .15f;
     public bool allowJump = false;
     public float walkSpeed = 2.2f;
     public float crouchSpeed = 1.5f;
     public const string MovementHint = "WASD / arrows: move   Mouse: look";
+    public float passageTriggerX = -1f;
+    public float approachTriggerX = .15f;
+    public float passageWarningSeconds = 1.25f;
+    public float approachWarningSeconds = 1.25f;
+    public float reactionReserve = .3f;
     public float minimumInterval = 1f;
     public float maximumInterval = 2f;
     [Range(0f, 1f)] public float environmentalChance = .3f;
@@ -32,8 +37,9 @@ public class Level1Configuration
         props[4].predictedArea = new Bounds(new Vector3(-3.4f,1,3),new Vector3(1.6f,2,.6f));
         props[5].predictedArea = new Bounds(new Vector3(-5,1,-1.65f),new Vector3(1.1f,3,1.1f));
         props[6].predictedArea = new Bounds(new Vector3(1f,1.1f,1.6f),new Vector3(2f,2.4f,2.4f));
-        props[7].predictedArea = new Bounds(new Vector3(0,1,-1.4f),new Vector3(1.4f,3,1.4f));
-        props[8].predictedArea = new Bounds(new Vector3(0,1,1.4f),new Vector3(1.4f,3,1.4f));
+        props[7].predictedArea = new Bounds(new Vector3(3.05f,1.4f,-1.65f),new Vector3(1f,2.9f,1.25f));
+        props[8].predictedArea = new Bounds(new Vector3(3.05f,1.4f,1.65f),new Vector3(1f,2.9f,1.25f));
+        props[9].predictedArea = new Bounds(new Vector3(3.35f,1.4f,0),new Vector3(.7f,2.9f,1.5f));
     }
 
     public readonly Vector3[][] Routes = {
@@ -84,7 +90,7 @@ public class Level1Configuration
                 {
                     if (hit.gameObject == player.gameObject) continue;
                     // A settled, low fixture is traversable with the existing controller step offset.
-                    var prop = hit.GetComponent<FallingProp>();
+                    var prop = hit.GetComponentInParent<FallingProp>();
                     if (prop && prop.Settled && hit.bounds.max.y <= controller.stepOffset) continue;
                     obstruction = hit.name + " at " + feet;
                     return false;

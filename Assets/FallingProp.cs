@@ -13,8 +13,21 @@ public class FallingProp : MonoBehaviour
     public Bounds predictedArea;
     public bool routeObstacle = true;
     public bool Committed { get; private set; }
-    public bool Settled => triggered && (rb.IsSleeping() ||
-        (rb.velocity.sqrMagnitude < .01f && rb.angularVelocity.sqrMagnitude < .01f));
+    bool departed;
+    Vector3 releasePosition;
+    Quaternion releaseRotation;
+    public bool Settled
+    {
+        get
+        {
+            if (!triggered) return false;
+            departed |= Vector3.Distance(rb.position,releasePosition) > .005f ||
+                Quaternion.Angle(rb.rotation,releaseRotation) > .5f;
+            // AddForce is integrated by the next physics step. Zero initial velocity is not settlement.
+            return departed && (rb.IsSleeping() ||
+                (rb.velocity.sqrMagnitude < .01f && rb.angularVelocity.sqrMagnitude < .01f));
+        }
+    }
     public Bounds RestingBounds
     {
         get
@@ -30,9 +43,7 @@ public class FallingProp : MonoBehaviour
     public bool HasImpacted => playedImpact;
     Collider[] colliders;
     float warningStart, releaseAt;
-    Material warningMaterial;
     Vector3 committedPush, committedTorque;
-    GameObject warningMarker;
     AudioSource warningAudio;
 
     public void Warn(EarthquakeDirector owner, float seconds, float now)
@@ -41,13 +52,6 @@ public class FallingProp : MonoBehaviour
         Committed = IsWarning = true; director=owner;
         committedPush = pushImpulse; committedTorque = torqueImpulse;
         warningStart=now; releaseAt=now+seconds;
-        warningMarker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        warningMarker.name = label + " fall warning";
-        var markerCollider=warningMarker.GetComponent<Collider>();
-        markerCollider.enabled=false; Destroy(markerCollider);
-        warningMarker.transform.position = new Vector3(predictedArea.center.x,.015f,predictedArea.center.z);
-        warningMarker.transform.localScale = new Vector3(predictedArea.size.x,.02f,predictedArea.size.z);
-        warningMaterial=warningMarker.GetComponent<Renderer>().material;
         warningAudio=gameObject.AddComponent<AudioSource>();
         warningAudio.playOnAwake=false;
         warningAudio.spatialBlend=.55f; warningAudio.minDistance=4f; warningAudio.maxDistance=18f;
@@ -64,7 +68,6 @@ public class FallingProp : MonoBehaviour
         if (director.CurrentPhase != EarthquakeDirector.Phase.Shaking) { ClearWarning(); return; }
         if (now >= releaseAt) { ClearWarning(); Trigger(director); return; }
         float t=now-warningStart;
-        warningMaterial.color=Color.Lerp(new Color(.4f,.15f,0),Color.yellow,.5f+.5f*Mathf.Sin(t*8));
         if (warningVisual)
         {
             float envelope=Mathf.Clamp01(t/.25f)*Mathf.Clamp01((releaseAt-now)/.25f);
@@ -77,8 +80,6 @@ public class FallingProp : MonoBehaviour
         IsWarning=false;
         if (warningVisual) warningVisual.localRotation=Quaternion.identity;
         if (warningAudio) GameAudio.FadeOut(warningAudio);
-        if (warningMarker) Destroy(warningMarker);
-        if (warningMaterial) Destroy(warningMaterial);
     }
 
     Rigidbody rb;
@@ -98,6 +99,7 @@ public class FallingProp : MonoBehaviour
     {
         if (triggered || owner.CurrentPhase != EarthquakeDirector.Phase.Shaking) return;
         if (!Committed) { committedPush = pushImpulse; committedTorque = torqueImpulse; Committed = true; }
+        releasePosition = rb.position; releaseRotation = rb.rotation;
         triggered = true;
         director = owner;
         rb.isKinematic = false;
@@ -141,8 +143,10 @@ public class FallingProp : MonoBehaviour
     public void HitController(ControllerColliderHit hit)
     {
         if (!Active) return;
-        // Use current motion here: the controller may walk into an already settled prop.
-        TryDamage(Vector3.Dot(rb.GetPointVelocity(hit.point), hit.normal));
+        // Controller contact resolution can stop a falling body before this callback too.
+        // The pre-step sample clears on the next fixed step, so settled debris stays harmless.
+        TryDamage(Mathf.Max(Vector3.Dot(rb.GetPointVelocity(hit.point), hit.normal),
+            Vector3.Dot(IncomingVelocity(hit.point), hit.normal)));
     }
 
     void TryDamage(float incomingSpeed)

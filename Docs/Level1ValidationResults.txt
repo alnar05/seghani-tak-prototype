@@ -1,0 +1,53 @@
+Original geometry reproduction
+BASE shelf=South_Bookshelf colliders=2 joints=0
+BASE light=South_Caution_Light bounds=Center: (0.00, 2.03, -1.40), Extents: (0.60, 0.13, 0.60)
+BASE support candidate=South_Bookshelf center=(1.00, 1.13, -2.33) size=(1.70, 1.55, 0.65) attached=South_Bookshelf
+BASE shelf resting=Center: (1.00, 0.95, -2.33), Extents: (0.85, 0.95, 0.33) light after shelf=Center: (0.00, 2.03, -1.57), Extents: (0.60, 0.13, 0.60)
+BASE shelf=North_Bookshelf colliders=2 joints=0
+BASE light=North_Caution_Light bounds=Center: (0.00, 2.03, 1.40), Extents: (0.60, 0.13, 0.60)
+BASE support candidate=North_Bookshelf center=(1.00, 1.13, 2.33) size=(1.70, 1.55, 0.65) attached=North_Bookshelf
+BASE shelf resting=Center: (1.00, 1.00, 2.05), Extents: (0.85, 1.00, 0.57) light after shelf=Center: (0.00, 1.99, 1.01), Extents: (0.60, 0.13, 0.60)
+
+Final geometry and fixture native checks
+REPAIR South_Bookshelf bounds=Center: (1.00, 0.79, -1.37), Extents: (0.85, 0.79, 0.97) rotation=(56.70, 0.01, 0.02) minY=-0.0001155138 maxSpeed=1.823776 maxStep=0.03648701 minBottom=-0.0001162291 settled=True
+PASS isolated grounded rigid assembly South_Bookshelf
+REPAIR North_Bookshelf bounds=Center: (1.00, 0.79, 1.37), Extents: (0.85, 0.79, 0.97) rotation=(303.35, 0.00, 0.00) minY=6.330013E-05 maxSpeed=1.821444 maxStep=0.03644031 minBottom=5.567074E-05 settled=True
+PASS isolated grounded rigid assembly North_Bookshelf
+PASS initial routes and desk: seed=1701
+PASS physical obstruction, no-jump alternate and restart rebuild: seed=1701
+PASS initial routes and desk: seed=7
+PASS physical obstruction, no-jump alternate and restart rebuild: seed=7
+PASS initial routes and desk: seed=42
+PASS physical obstruction, no-jump alternate and restart rebuild: seed=42
+FIXTURE support=Floor prop=South passage ceiling light bounds=Center: (3.05, 0.08, -1.65), Extents: (0.50, 0.08, 0.63)
+FIXTURE support=Floor prop=Shelter approach ceiling light bounds=Center: (3.35, 0.08, 0.00), Extents: (0.35, 0.08, 0.75)
+PASS fixture floor contact side=-1 shelfFirst=False
+FIXTURE support=Floor prop=South passage ceiling light bounds=Center: (3.05, 0.08, -1.65), Extents: (0.50, 0.08, 0.63)
+FIXTURE support=Floor prop=Shelter approach ceiling light bounds=Center: (3.35, 0.08, 0.00), Extents: (0.35, 0.08, 0.75)
+PASS fixture floor contact side=-1 shelfFirst=True
+FIXTURE support=Floor prop=North passage ceiling light bounds=Center: (3.05, 0.08, 1.65), Extents: (0.50, 0.08, 0.63)
+FIXTURE support=Floor prop=Shelter approach ceiling light bounds=Center: (3.35, 0.08, 0.00), Extents: (0.35, 0.08, 0.75)
+PASS fixture floor contact side=1 shelfFirst=False
+FIXTURE support=Floor prop=North passage ceiling light bounds=Center: (3.05, 0.08, 1.65), Extents: (0.50, 0.08, 0.63)
+FIXTURE support=Floor prop=Shelter approach ceiling light bounds=Center: (3.35, 0.08, 0.00), Extents: (0.35, 0.08, 0.75)
+PASS fixture floor contact side=1 shelfFirst=True
+
+Protected Play Mode / settings / extremes
+PASS shelter, shelf physics, Settings pause, camera extremes seed=1701 opening=South_Bookshelf
+PASS shelter, shelf physics, Settings pause, camera extremes seed=42 opening=North_Bookshelf
+PASS shelter, shelf physics, Settings pause, camera extremes seed=7 opening=South_Bookshelf
+
+Final isolated route checks
+STRATEGY seed=1701 route=0 attentive=False dead=True waypoint=3 position=(2.45, 0.03, -1.37)
+STRATEGY seed=1701 route=0 attentive=True dead=False waypoint=6 position=(5.01, 0.03, 0.00)
+STRATEGY seed=1701 route=1 attentive=False dead=True waypoint=4 position=(2.44, 0.03, 1.37)
+STRATEGY seed=1701 route=1 attentive=True dead=False waypoint=6 position=(5.01, 0.03, 0.00)
+STRATEGY seed=42 route=0 attentive=False dead=True waypoint=3 position=(2.44, 0.03, -1.38)
+STRATEGY seed=42 route=0 attentive=True dead=False waypoint=5 position=(5.01, 0.03, 0.00)
+STRATEGY seed=42 route=1 attentive=False dead=True waypoint=3 position=(0.77, 0.03, 1.40)
+STRATEGY seed=42 route=1 attentive=True dead=False waypoint=5 position=(5.01, 0.03, 0.00)
+PASS challenge integration and transitions; rendered captures in /tmp/seghani-captures
+
+Final endpoint rendering
+PASS rendered floor fixture and shelter gap side=-1
+PASS rendered floor fixture and shelter gap side=1

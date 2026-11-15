@@ -22,7 +22,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     Transform root;
     Text objectiveText, stanceText, resultTitle, resultBody;
     Image vignette;
-    GameObject resultPanel, pausePanel;
+    GameObject resultPanel, pausePanel, hudRoot;
     Button resumeButton, restartButton, quitButton;
 
     FirstPersonCrouchController playerCtrl;
@@ -31,16 +31,12 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     SafeZoneTrigger safeZone;
     SafeFeedback safeFeedback;
     EarthquakeDirector director;
-    FallingProp frameProp, lampProp, shelfProp, windowProp, tvProp, spawnLightProp, northShelf, southCaution, northCaution;
+    FallingProp frameProp, lampProp, shelfProp, windowProp, tvProp, spawnLightProp, northShelf, southCaution, northCaution, approachPanel;
     BoxCollider eastWall;
 
     void Awake()
     {
-        if (!GameFlow.Playing)
-        {
-            gameObject.AddComponent<GameFlow>();
-            return;
-        }
+        bool menuBackdrop = !GameFlow.Playing;
         roomWidth = level.roomSize.x;
         roomDepth = level.roomSize.z;
         roomHeight = level.roomSize.y;
@@ -50,6 +46,16 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         BuildRoom();
         Transform desk = BuildDesk();
         BuildFurniture();
+        if (menuBackdrop)
+        {
+            // The menu shows the same room, furniture and shelter as the playable level.
+            var view = new GameObject("Menu room camera").AddComponent<Camera>();
+            view.transform.position = new Vector3(5.45f, 2.35f, -3.1f);
+            view.transform.LookAt(new Vector3(1.1f, 1f, 1.3f));
+            view.fieldOfView = 68f;
+            gameObject.AddComponent<GameFlow>();
+            return;
+        }
         BuildUI();
         BuildPlayer();
         BuildSafeZone(desk, objectiveText);
@@ -152,6 +158,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         northShelf = BuildBookcase(1);
         southCaution = BuildCautionLight(-1);
         northCaution = BuildCautionLight(1);
+        approachPanel = BuildFixture("Shelter approach ceiling light", new Vector3(3.35f,2.75f,0), new Vector3(.7f,.16f,1.5f));
         var pane = Box("WindowPane",new Vector3(-5.97f,1.6f,-2.8f),new Vector3(.04f,1.2f,1.2f),new Color(.6f,.8f,.95f));
         windowProp = MakeProp(pane,4f,"Falling window pane",new Vector3(1.2f,0,0),Vector3.zero);
         var tv = Box("TV",new Vector3(-3.4f,.85f,2.9f),new Vector3(1.1f,.7f,.1f),new Color(.08f,.08f,.1f));
@@ -189,12 +196,23 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         return prop;
     }
 
-    FallingProp BuildCautionLight(int side)
+    FallingProp BuildCautionLight(int side) => BuildFixture(
+        side < 0 ? "South passage ceiling light" : "North passage ceiling light",
+        new Vector3(3.05f,2.75f,side*1.65f), new Vector3(1f,.16f,1.25f));
+
+    FallingProp BuildFixture(string name, Vector3 position, Vector3 size)
     {
-        var light=Box(side<0?"South_Caution_Light":"North_Caution_Light",new Vector3(0,2.55f,side*1.4f),
-            new Vector3(1.2f,.25f,1.2f),new Color(.9f,.85f,.5f));
-        var prop=MakeProp(light,5,"Falling passage light",Vector3.zero,Vector3.zero);
-        prop.routeObstacle=false; light.GetComponent<Rigidbody>().constraints=RigidbodyConstraints.FreezeRotation;
+        // A single visible metal housing collider, clear of bookcases and door lintels.
+        var housing = Box(name,position,size,new Color(.22f,.26f,.28f));
+        var model = new GameObject("Light diffuser").transform;
+        model.SetParent(housing.transform,false);
+        var diffuser = DeskPart(model,"Warm diffuser",new Vector3(0,-.53f,0),new Vector3(.86f,.06f,.85f),new Color(1f,.91f,.67f));
+        DestroyImmediate(diffuser.GetComponent<Collider>());
+        var prop = MakeProp(housing,5,name,Vector3.zero,Vector3.zero);
+        prop.routeObstacle = false;
+        // A flat housing falls vertically and remains a stepable, physical floor object.
+        housing.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezeRotation;
+        prop.warningVisual = model;
         return prop;
     }
 
@@ -278,20 +296,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         fb.player = playerCtrl;
         fb.cam = playerCam;
         
-        var go = new GameObject("SafeBurst");
-        var ps = go.AddComponent<ParticleSystem>();
-        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-        var main = ps.main;
-        main.playOnAwake = false;
-        main.loop = false;
-        main.startLifetime = 0.9f;
-        main.startSpeed = 2.2f;
-        main.startSize = 0.07f;
-        main.startColor = new Color(0.4f, 1f, 0.5f);
-        main.gravityModifier = 0.3f;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-        go.GetComponent<ParticleSystemRenderer>().material = new Material(Shader.Find("Sprites/Default"));
-        fb.burst = ps;
+
     }
 
     void BuildDirector()
@@ -299,6 +304,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         var go = new GameObject("EarthquakeDirector");
         director = go.AddComponent<EarthquakeDirector>();
         director.feedback = safeFeedback;
+        director.hud = hudRoot;
         director.player = playerCtrl;
         director.shake = shake;
         director.shelter = safeZone;
@@ -312,7 +318,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         hazards.director = director;
         director.hazards = hazards;
         hazards.configuration = level;
-        hazards.props = new[] { frameProp, lampProp, shelfProp, windowProp, tvProp, spawnLightProp, northShelf, southCaution, northCaution };
+        hazards.props = new[] { frameProp, lampProp, shelfProp, windowProp, tvProp, spawnLightProp, northShelf, southCaution, northCaution, approachPanel };
         level.AuthorHazards(hazards.props);
         level.ValidateRoutes(playerCtrl);
     }
@@ -321,11 +327,12 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     {
         var pm = new GameObject("PauseMenu").AddComponent<PauseMenu>();
         pm.panel = pausePanel;
+        pm.hud = hudRoot;
         pm.director = director;
 
         resumeButton.onClick.AddListener(pm.ResumeGame);
         restartButton.onClick.AddListener(pm.RestartLevel);
-        quitButton.onClick.AddListener(pm.QuitGame);
+        quitButton.onClick.AddListener(GameFlow.MainMenu);
 
         if (EventSystem.current == null)
         {
@@ -344,29 +351,51 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         var scaler = canvasGO.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.matchWidthOrHeight = .5f;
 
         Font font = Font.CreateDynamicFontFromOSFont("Arial", 36);
         Transform ct = canvasGO.transform;
+        hudRoot = new GameObject("Gameplay HUD",typeof(RectTransform));
+        hudRoot.transform.SetParent(ct,false);
+        var hudRect = hudRoot.GetComponent<RectTransform>();
+        hudRect.anchorMin=Vector2.zero; hudRect.anchorMax=Vector2.one;
+        hudRect.offsetMin=hudRect.offsetMax=Vector2.zero;
+        Transform hud = hudRoot.transform;
 
         Sprite vig = MakeVignetteSprite();
-        vignette = MakeFullscreenImage(ct, "SafeVignette", vig, new Color(0.3f, 1f, 0.45f, 0f));
+        vignette = MakeFullscreenImage(hud, "SafeVignette", vig, new Color(0.3f, 1f, 0.45f, 0f));
 
-        objectiveText = MakeText(ct, "ObjectiveText", font, 32, TextAnchor.UpperCenter,
-                                 new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(1100, 70));
+        objectiveText = MakeText(hud, "ObjectiveText", font, 28, TextAnchor.UpperCenter,
+                                 new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(1400, 120));
         objectiveText.fontStyle = FontStyle.Bold;
         objectiveText.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-        stanceText = MakeText(ct, "StanceText", font, 30, TextAnchor.LowerCenter,
+        stanceText = MakeText(hud, "StanceText", font, 30, TextAnchor.LowerCenter,
                               new Vector2(0.5f, 0f), new Vector2(0f, 25f), new Vector2(900, 50));
 
-        resultPanel = MakePanel(ct, "ResultPanel", new Color(0, 0, 0, 0.78f));
-        resultTitle = MakeText(resultPanel.transform, "ResultTitle", font, 72, TextAnchor.MiddleCenter,
-                               new Vector2(0.5f, 0.5f), new Vector2(0f, 300f), new Vector2(1600, 120));
+        resultPanel = MakePanel(ct, "ResultPanel", new Color(.015f,.025f,.03f,.72f));
+        var resultCard = MakePanel(resultPanel.transform, "ResultCard", new Color(.075f,.115f,.13f,.98f));
+        var cardRect = resultCard.GetComponent<RectTransform>();
+        cardRect.anchorMin = cardRect.anchorMax = new Vector2(.5f,.5f);
+        cardRect.anchoredPosition = Vector2.zero;
+        cardRect.sizeDelta = new Vector2(920,650);
+        var border = resultCard.AddComponent<Outline>();
+        border.effectColor = new Color(.3f,.42f,.43f,.5f);
+        border.effectDistance = new Vector2(1,-1);
+
+        resultTitle = MakeText(resultCard.transform, "ResultTitle", font, 56, TextAnchor.MiddleCenter,
+                               new Vector2(.5f,.5f), new Vector2(0,185), new Vector2(800,90));
         resultTitle.fontStyle = FontStyle.Bold;
-        resultBody = MakeText(resultPanel.transform, "ResultBody", font, 32, TextAnchor.MiddleCenter,
-                              new Vector2(0.5f, 0.5f), new Vector2(0f, -50f), new Vector2(1600, 700));
-        MakeButton(resultPanel.transform, "Retry Level", font, new Vector2(-250f, -430f)).onClick.AddListener(GameFlow.Retry);
-        MakeButton(resultPanel.transform, "Main Menu", font, new Vector2(250f, -430f)).onClick.AddListener(GameFlow.MainMenu);
+        resultBody = MakeText(resultCard.transform, "ResultBody", font, 30, TextAnchor.MiddleCenter,
+                              new Vector2(.5f,.5f), new Vector2(0,65), new Vector2(760,130));
+        resultBody.horizontalOverflow = HorizontalWrapMode.Wrap;
+        resultBody.color = new Color(.78f,.83f,.84f);
+        MakeButton(resultCard.transform, "Retry Level", font, new Vector2(0,-90)).onClick.AddListener(GameFlow.Retry);
+        MakeButton(resultCard.transform, "Main Menu", font, new Vector2(0,-200)).onClick.AddListener(GameFlow.MainMenu);
+        var resultHint = MakeText(resultCard.transform, "ResultControls", font, 22, TextAnchor.MiddleCenter,
+            new Vector2(.5f,.5f), new Vector2(0,-280), new Vector2(800,40));
+        resultHint.text = "R to retry  •  ↑ ↓ / Tab to select  •  Enter to confirm";
+        resultHint.color = new Color(.6f,.69f,.71f);
         resultPanel.SetActive(false);
 
         pausePanel = MakePanel(ct, "PausePanel", new Color(0, 0, 0, 0.72f));
@@ -374,27 +403,29 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
                                    new Vector2(0.5f, 0.5f), new Vector2(0f, 260f), new Vector2(1000, 120));
         pauseTitle.text = "PAUSED";
         pauseTitle.fontStyle = FontStyle.Bold;
-        resumeButton = MakeButton(pausePanel.transform, "Resume", font, new Vector2(0f, 90f));
-        restartButton = MakeButton(pausePanel.transform, "Restart", font, new Vector2(0f, -20f));
-        quitButton = MakeButton(pausePanel.transform, "Quit", font, new Vector2(0f, -130f));
+        resumeButton = MakeButton(pausePanel.transform, "Resume", font, new Vector2(0f, 140f));
+        restartButton = MakeButton(pausePanel.transform, "Restart Level", font, new Vector2(0f, -190f));
+        quitButton = MakeButton(pausePanel.transform, "Main Menu", font, new Vector2(0f, -300f));
         
         Text hint = MakeText(pausePanel.transform, "ControlsHint", font, 24, TextAnchor.MiddleCenter,
                              new Vector2(0.5f, 0f), new Vector2(0f, 40f), new Vector2(1400, 40));
         hint.text = Level1Configuration.MovementHint + (level.allowJump ? "   Space: jump" : "") + "   C / Ctrl: crouch   Esc: pause";
         hint.color = new Color(1, 1, 1, 0.75f);
         
-        MakeButton(pausePanel.transform, "Settings", font, new Vector2(0,-240)).onClick.AddListener(() => OverlayMenus.Settings(pausePanel));
-        MakeButton(pausePanel.transform, "How to play", font, new Vector2(0,-350)).onClick.AddListener(() => OverlayMenus.Help(pausePanel));
-        var help = MakeButton(ct, "How to play (H)", font, Vector2.zero);
+        MakeButton(pausePanel.transform, "Settings", font, new Vector2(0,-80)).onClick.AddListener(() => OverlayMenus.Settings(pausePanel));
+        MakeButton(pausePanel.transform, "How to play", font, new Vector2(0,30)).onClick.AddListener(() => OverlayMenus.Help(pausePanel));
+        var help = MakeButton(hud, "How to play (H)", font, Vector2.zero);
         var helpRect = help.GetComponent<RectTransform>();
         helpRect.anchorMin = helpRect.anchorMax = new Vector2(1,1);
-        helpRect.anchoredPosition = new Vector2(-160,-105);
+        helpRect.anchoredPosition = new Vector2(-160,-200);
         helpRect.sizeDelta = new Vector2(280,60);
         var helpLabel = help.GetComponentInChildren<Text>();
         helpLabel.fontSize = 28; helpLabel.rectTransform.sizeDelta = new Vector2(280,60);
         help.onClick.AddListener(() => OverlayMenus.Help());
         var overlay = canvasGO.AddComponent<OverlayMenus>();
         overlay.Initialize(font);
+        pausePanel.AddComponent<MenuNavigation>();
+        resultPanel.AddComponent<MenuNavigation>();
         pausePanel.SetActive(false);
     }
 
@@ -416,21 +447,23 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         var go = new GameObject(label + "Button");
         go.transform.SetParent(parent, false);
         var img = go.AddComponent<Image>();
-        img.color = new Color(0.15f, 0.15f, 0.18f, 0.95f);
+        img.color = Color.white;
         var btn = go.AddComponent<Button>();
         btn.targetGraphic = img;
         var colors = btn.colors;
-        colors.highlightedColor = new Color(0.45f, 0.75f, 0.5f);
+        colors.normalColor = new Color(.16f,.23f,.25f,.97f);
+        colors.highlightedColor = new Color(.25f,.5f,.4f);
+        colors.selectedColor = new Color(.25f,.5f,.4f);
         colors.pressedColor = new Color(0.3f, 0.55f, 0.35f);
         btn.colors = colors;
 
         var rt = img.rectTransform;
         rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = pos;
-        rt.sizeDelta = new Vector2(420f, 80f);
+        rt.sizeDelta = new Vector2(480f, 80f);
 
-        Text t = MakeText(go.transform, "Label", font, 40, TextAnchor.MiddleCenter,
-                          new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(420f, 80f));
+        Text t = MakeText(go.transform, "Label", font, 32, TextAnchor.MiddleCenter,
+                          new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(480f, 80f));
         t.text = label;
         t.raycastTarget = false;
         return btn;
@@ -461,6 +494,7 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         t.fontSize = size;
         t.alignment = align;
         t.color = Color.white;
+        t.raycastTarget = false;
         t.horizontalOverflow = HorizontalWrapMode.Overflow;
         t.verticalOverflow = VerticalWrapMode.Overflow;
         go.AddComponent<Shadow>().effectDistance = new Vector2(2, -2);

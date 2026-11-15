@@ -1,101 +1,84 @@
-# Current bookshelf sequence repair
+# Level 1 challenge and menus
 
-See [BookshelfRepair.md](BookshelfRepair.md) for the current timing/physics diagnosis,
-fixes, executed tests and remaining visual checks. That focused pass supersedes the
-orientation-period warning and jointed bookcase details in the historical iteration below.
+The room has two corridors leading to a protective desk. Survive until the earthquake
+stops; shelter is protective but never mandatory on a timer. Damage comes from moving
+props contacting the player. Settled debris and doorways do not inflict proximity damage.
 
-## Historical observed-gameplay iteration
+## Geometry diagnosis
 
-The two-room/two-passage footprint, shared menus, Settings and saved preferences,
-audio, camera settings, pause, results and scene reload flow are retained.
+Native Unity reproduction of the old layout released each passage light while its
+bookcase stood upright. Both lights stopped at center y≈2.03, bottom y≈1.90. The
+support query identified the corresponding bookcase's **upper BoxCollider**: center
+(1,1.125,±2.325), size (1.7,1.55,.65). The light and upper collider overlapped in
+horizontal footprint. There was no joint, hidden shelf or warning-marker collider.
+The existing bookshelf is one unscaled rigidbody with two contiguous colliders;
+its lower section moves with it. Those colliders represent the visible cabinet.
 
-## Why the previous version was easy
+The small repeated squares in the model are `Book_Front` render meshes with their
+colliders removed, representing book spines. No runtime debug renderer or gizmo
+code exists in Assets. Editor selection/gizmo overlays are not player-build geometry.
+The deliberate pulsing floor warning is gameplay information and has no collider.
+The other square visual source was `SafeBurst`: green billboard confetti emitted on
+entering shelter. Those particles had no colliders; that distracting effect is removed.
+HUD and shelter vignette now hide behind Pause, Help, Settings and results.
 
-A direct run took roughly three seconds, but the opening fall occurred around six
-seconds. The short branch always received the bookshelf, the other branch was then
-reserved, and peripheral events did not challenge it. The .4 m fallen shelf was close
-to the .3 m controller step offset and jumping could bypass it. These were structural
-bypasses; louder audio or stronger shake would not fix them.
+The passage lights now hang beyond the exit lintels at x=3.05, away from both
+bookcase swept envelopes. Each has a metal housing and warm inset diffuser. The
+single .16 m housing collider matches its visible body. A committed, vertical
+gravity fall ends on the real floor, below the .3 m controller step offset. The
+new approach light ends at x=3.7, leaving .8 m to the desk front so the controller
+can step down before entering the low shelter. No joint,
+position correction, final-pose teleport or invisible route wall is added.
 
-## Focused changes
+A released prop must actually move before it reports settlement: an AddForce waiting
+for the first physics step previously looked like a settled zero-velocity body.
+Controller impact handling also preserves pre-step incoming velocity, as rigidbody
+collision handling already did, so collision resolution cannot erase a real strike.
 
-- The large desk sign is removed. The wood desk and restrained existing light identify
-  cover, with the concise HUD goal and expandable instructions supplying guidance.
-- Desk parts are authored in desk-local space. The tabletop is 2 x 1.2 m, with its back
-  .3 m from the actual generated east-wall bounds. At the default wall x=6 the desk
-  center is x=5.1 and its tabletop/legs end at x=5.7. If the wall is at x=5, placement
-  derives x=4.1 instead. Routes update to the generated desk position.
-- The shelter trigger is the leg-to-leg interior: 1.84 x 1 x 1.04 m in desk-local axes.
-  Protection requires the entire crouched controller bounds to fit inside it, rather
-  than testing only the player's origin. Geometry checks examine world-space wall
-  penetration and crouch access during construction.
-- Level 1 disables jumping through `allowJump=false`; other uses of the controller
-  default to allowing it. Gameplay hints follow the level/player setting. UI Space
-  submit remains available. Level 1 walking/crouching speeds are 2.2/1.5 m/s.
-- Two bookcases are preplaced. A seed chooses the opening south or north bookcase
-  before any warning. Its 2.75-second warning begins during the 2.5-second orientation
-  phase; physical release occurs only while the earthquake is active. Warning positions
-  and impulses are fixed before cue playback. The former six-second uncontested lead
-  is removed, rather than adding damage for being outside cover.
-- Each bookcase has a visible .45 m solid base and a hinged 1.55 m upper section,
-  .7 m deep. At rest the upper section occupies about y=.45..1.15 and reaches across
-  its passage. The base covers the rear gap. Both colliders match visible furniture;
-  no invisible route wall is added. Neither part can be stepped over at .3 m, and
-  the under-gap is too low for a .9 m crouched player.
-- The opposite bookcase remains upright. After the opening event settles, the other
-  passage can receive a separately warned falling light. Its flat .25 m settled
-  fixture is designed to be stepped over without jumping. Events remain serialized,
-  with escape checks, a one-second settlement hold and a 1–2 second interval.
-  Subsequent events retain environmental draws and player-aware selection. No warning
-  retargets; no automatic cover deadline, cover-exit death or proximity damage exists.
+## Encounter sequence
 
-Same seed plus the same inputs/timing reproduces scheduler choices; physics is not
-bit-exact. Repeating a fixed seed intentionally repeats its opening route. Test across
-seeds to evaluate fixed-passage habits. The north passage is no longer always reserved.
+The former scheduler serialized the opening shelf, settlement and the other
+corridor's light. Players could reach shelter before the second warning. The former
+2.5 s calm period also let an immediate run cover much of the level before onset.
 
-## Checks actually performed
+- Default calm lasts .8 s. All warnings remain after earthquake onset. A seed chooses
+  the initial threatened bookcase; its 2.75 s warning becomes eligible .15 s after
+  onset. The opposite bookcase stays upright.
+- Each corridor exit has a preplaced ceiling fixture. Approaching x=-1 on that side
+  starts its own configurable warning. The player can stop outside the pulsing area,
+  retreat, or judge the opening. Waiting for the bookshelf to settle no longer delays
+  the entire encounter sequence.
+- Approaching x=.15 makes the final light eligible. Its fall footprint is before the
+  desk; settled housing can be stepped over, and the desk remains protective.
+- Existing picture, window, TV, entry light and lamp events remain as sparse later
+  environmental draws. They use the same commitment and safety checks.
 
-- Player and Editor C# compilation against the installed Unity assemblies; whitespace.
-- Independent numerical initial-route, desk setback and expected resting-pose checks.
-- **Headless Unity 2023.1.22f1 native physics/controller checks** in a disposable copy:
-  both initial routes navigated without jumping; desk/trigger cleared the actual wall;
-  a crouched capsule at the desk was safe. For seeds 1701/7 (south) and 42 (north),
-  the real hinge settled near 90 degrees, the fallen bookcase obstructed attempted
-  no-jump traversal, and the other route remained navigable. That route was also
-  navigated after its caution light physically fell and settled. Three fresh level
-  object builds passed, establishing geometry reset for that harness.
-- Test source: [Level1PhysicsChecks.cs](../Tools/Level1PhysicsChecks.cs).
-  Output summary: [Level1PhysicsResults.txt](Level1PhysicsResults.txt).
-- Code tracing confirms actual restarts still reload the room scene and recreate
-  props, joints, scheduler/RNG, controller and shelter state. Actual menu-driven restart
-  repetition was not exercised by the headless object-rebuild harness.
+Warning commitment freezes position, push, torque and release deadline. Events never
+follow or retarget the player. Seed affects route choice, rather than promising
+bit-identical PhysX results. Inspector values on `Level1Configuration` control the
+onset, warning lengths, approach thresholds, reserve and ambient intervals.
 
-## What is not verified
+Before commitment, a capsule-based floor search checks the player's current location,
+actual compound debris geometry, and other committed warning/fall footprints. It
+requires a reachable refuge within a crouched response budget for temporary fixtures,
+and a complete remaining path to shelter before adding a permanent route obstruction.
+An unsafe event is deferred. This is conservative scheduling, not collision geometry.
+Warnings use a floor pulse, local creak, visual rocking and a concise HUD message.
 
-No input-driven Unity gameplay or listening test was performed. Warning visibility,
-comfort, perceived walking pace, deaths from moving-prop contact, direct sprint/hold-W
-outcomes, and difficulty across repeated passage choices remain playtest questions.
-Do not treat successful geometry tests as verified challenge or fairness.
+Movement retains the configured 2.2/1.5 m/s speeds during shaking. Earthquake sway is
+cosmetic camera motion; it no longer displaces the controller. Difficulty should come
+from observing hazards, not input slowdown, audio levels or camera strength.
 
-The timing analysis places an immediate south walk inside the gate near the 2.75 s
-release, rather than beyond it; the longer north path arrives later. The seed can
-threaten either branch. Those are code/timing observations, not measured human outcomes.
-Menus and Settings were preserved, but need their normal interactive regression test.
+## Menus and settings
 
-## Short playtest checklist
+See [SettingsAndAudio.md](SettingsAndAudio.md). The menu backdrop renders this same
+room, including the desk and installed fixtures, under a dark overlay. How to Play
+has Goal, Movement, Take Cover and Watch for Hazards cards, with controls and a small
+desk/warning illustration. Pause offers Resume, How to play, Settings, Restart Level
+and Main Menu. Panels share typography, spacing, button states and vertical/Tab
+navigation. Modal Back/Esc restores its caller's clock, audio, cursor and selection.
 
-1. **Desk and jumping:** approach from both entrances, crouch in/out, release crouch
-   under the tabletop, and test the edges of the shelter indicator. Press Space while
-   moving; no Level 1 jump should occur. Look for any tabletop/leg/wall clipping.
-2. **Direct movement and fixed choices:** use seeds 1701, 7 and 42. Hold forward toward
-   the desk at the fastest allowed pace; then repeat always taking south, then north.
-   Record warning time, whether the gate can be crossed uninterrupted, any physical
-   impact, and whether stopping/retreating/choosing the other branch works. If a fixed
-   choice reliably bypasses interactions across seeds, pacing still needs tuning.
-3. **Hesitation and final layout:** stop at a warning, retreat from either side, take
-   the other passage and time its separate light warning. Test actual walk/crouch
-   obstruction around and under the fallen bookcase. The remaining passage and desk
-   must stay accessible without jumping; waiting outside or leaving cover alone is legal.
-4. **Repeatability/regression:** retry through Pause, results and R, then Main Menu/Play.
-   Verify both bookcases reset upright, lights reset, seed selection repeats correctly,
-   and instructions, Settings, mute/preview, saved preferences and pause restoration work.
+## Validation
+
+See [Level1Validation.md](Level1Validation.md) for the executed checks, evidence and
+remaining limits. Historical bookshelf-only work is in [BookshelfRepair.md](BookshelfRepair.md).

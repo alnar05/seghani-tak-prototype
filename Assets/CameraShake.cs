@@ -18,6 +18,15 @@ public class CameraShake : MonoBehaviour
         transform.localPosition = Vector3.zero;
     }
 
+    public void ApplySettings()
+    {
+        if (GameAudio.Shake <= 0f)
+        {
+            transform.localRotation = Quaternion.identity;
+            transform.localPosition = Vector3.zero;
+        }
+    }
+
     void LateUpdate()
     {
         kick = Mathf.MoveTowards(kick, 0f, Time.deltaTime * 2.5f);
@@ -31,6 +40,9 @@ public class CameraShake : MonoBehaviour
         transform.localRotation = Quaternion.Euler(nx * 2f * maxAngle * a,
                                                    ny * 2f * maxAngle * a,
                                                    nz * 1.5f * maxAngle * a);
-        transform.localPosition = new Vector3(ny, nx, 0f) * 2f * maxOffset * a;
+        // Low-frequency earthquake sway belongs to the cosmetic camera, not player locomotion.
+        float sway = Mathf.PerlinNoise(Time.time * 3f, .5f) - .5f;
+        transform.localPosition = (new Vector3(ny, nx, 0f) * 2f * maxOffset +
+            Vector3.right * sway * .035f) * a;
     }
 }

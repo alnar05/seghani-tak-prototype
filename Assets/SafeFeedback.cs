@@ -70,6 +70,11 @@ public class SafeFeedback : MonoBehaviour
         enabled = false;
     }
 
+    public void ApplyCameraSetting()
+    {
+        if (cam) cam.fieldOfView = baseFov - fovKick * GameAudio.Shake;
+    }
+
     void Update()
     {
         if (objectiveText && popT < 1f)
@@ -91,7 +96,7 @@ public class SafeFeedback : MonoBehaviour
         if (cam)
         {
             fovKick = Mathf.Lerp(fovKick, 0f, Time.deltaTime * 6f);
-            cam.fieldOfView = baseFov - fovKick * GameAudio.Shake;
+            ApplyCameraSetting();
         }
 
         if (stanceText && player)

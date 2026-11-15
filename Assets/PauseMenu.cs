@@ -3,7 +3,7 @@ using UnityEngine.SceneManagement;
 
 public class PauseMenu : MonoBehaviour
 {
-    public GameObject panel;
+    public GameObject panel, hud;
     public EarthquakeDirector director;
 
     public bool IsPaused { get; private set; }
@@ -36,6 +36,7 @@ public class PauseMenu : MonoBehaviour
     {
         if (director && director.CurrentPhase == EarthquakeDirector.Phase.Ended) return;
         IsPaused = true;
+        if (hud) hud.SetActive(false);
         Time.timeScale = 0f;
         AudioListener.pause = true;
         if (panel)
@@ -52,6 +53,7 @@ public class PauseMenu : MonoBehaviour
     {
         if (director && director.CurrentPhase == EarthquakeDirector.Phase.Ended) return;
         IsPaused = false;
+        if (hud) hud.SetActive(true);
         Time.timeScale = 1f;
         AudioListener.pause = false;
         if (panel) panel.SetActive(false);

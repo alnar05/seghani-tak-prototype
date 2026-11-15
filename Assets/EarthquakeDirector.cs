@@ -1,4 +1,3 @@
-using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -9,7 +8,7 @@ public class EarthquakeDirector : MonoBehaviour
     public Phase CurrentPhase { get; private set; } = Phase.Calm;
 
     public float quakeStart = 10f;
-    public float quakeEnd = 34f;
+    public float quakeEnd = 25f;
     public SafeFeedback feedback;
     public HazardScheduler hazards;
     public float RoundTime => elapsed;
@@ -18,7 +17,7 @@ public class EarthquakeDirector : MonoBehaviour
     public CameraShake shake;
     public SafeZoneTrigger shelter;
     
-    public GameObject resultPanel;
+    public GameObject resultPanel, hud;
     public Text resultTitle, resultBody;
 
     [HideInInspector] public bool isDead;
@@ -28,10 +27,9 @@ public class EarthquakeDirector : MonoBehaviour
     AudioClip crashClip;
     GameAudio rumbleGain;
     float lastCrash = -1f;
-    public const string Briefing = "Survive until the earthquake stops. Crouch under the sturdy desk for protection. Watch for falling furniture.";
+    public const string Briefing = "Hide under the cover.";
 
-    float elapsed, coverTime = -1f, exposedSeconds;
-    bool hasReachedCover;
+    float elapsed;
 
     public void PlayCrash()
     {
@@ -44,7 +42,7 @@ public class EarthquakeDirector : MonoBehaviour
         if (!isDead && CurrentPhase != Phase.Ended)
         {
             isDead = true;
-            End(false, reason, "Take cover under sturdy furniture and avoid moving hazards.");
+            End(false, reason);
         }
     }
 
@@ -59,8 +57,8 @@ public class EarthquakeDirector : MonoBehaviour
     void Start()
     {
         shelter.listening = false;
-        shelter.objectiveMessage = "Survive until the earthquake stops  •  H: How to play";
-        shelter.safeMessage = "Safe! Hold on until the shaking stops.";
+        shelter.objectiveMessage = Briefing;
+        shelter.safeMessage = Briefing;
         shelter.Refresh();
 
         var ambience = new GameObject("Earthquake ambience");
@@ -97,7 +95,7 @@ public class EarthquakeDirector : MonoBehaviour
 
         if (Time.timeScale <= 0f) return;
 
-        elapsed += Time.deltaTime;
+        elapsed = Mathf.Min(elapsed + Time.deltaTime, quakeEnd);
 
         if (CurrentPhase == Phase.Calm && elapsed >= quakeStart) BeginQuake();
 
@@ -105,7 +103,6 @@ public class EarthquakeDirector : MonoBehaviour
         shelter.Evaluate(player);
         if (CurrentPhase == Phase.Shaking)
         {
-            ApplyHazards();
             CheckRules();
             if (CurrentPhase == Phase.Ended) return;
         }
@@ -113,19 +110,19 @@ public class EarthquakeDirector : MonoBehaviour
         float curveTime = Mathf.Lerp(10f, 34f, Mathf.InverseLerp(quakeStart, quakeEnd, elapsed));
         float intensity = CurrentPhase == Phase.Shaking ? Mathf.Clamp01(intensityCurve.Evaluate(curveTime)) : 0f;
 
-        // Initiate audio/visual shaking at onset without changing the existing physical sway/slowdown curve.
+        // Start sensory effects at onset; movement remains responsive throughout the quake.
         float sensoryIntensity = CurrentPhase == Phase.Shaking ?
             Mathf.Max(intensity,.05f*Mathf.Clamp01((quakeEnd-elapsed)/2f)) : 0f;
         shake.intensity = sensoryIntensity;
         rumbleGain.SetLevel(sensoryIntensity);
         if (CurrentPhase == Phase.Shaking)
         {
-            shelter.objectiveMessage = "Survive the earthquake — " + Mathf.CeilToInt(quakeEnd - elapsed) + " s remaining";
+            shelter.objectiveMessage = Briefing + "\n" + Mathf.CeilToInt(quakeEnd - elapsed) + " s remaining";
             shelter.safeMessage = shelter.objectiveMessage + "  •  In cover";
             shelter.Refresh();
         }
-        player.speedMultiplier = Mathf.Lerp(1f, 0.6f, intensity);
-        player.swayStrength = shelter.IsSafe ? 0f : intensity;
+        player.speedMultiplier = 1f;
+        player.swayStrength = 0f;
         if (hazards) hazards.Tick(elapsed,Time.deltaTime);
 
     }
@@ -134,36 +131,29 @@ public class EarthquakeDirector : MonoBehaviour
     {
         CurrentPhase = Phase.Shaking;
         shelter.listening = true;
-        shelter.objectiveMessage = "Survive the earthquake";
+        shelter.objectiveMessage = Briefing;
         shelter.Refresh();
         rumble.Play();
     }
 
-    void ApplyHazards()
-    {
-        if (!shelter.IsSafe)
-        {
-            exposedSeconds += Time.deltaTime;
-        }
-    }
-
     void CheckRules()
     {
-        if (isDead) return;
-
-        if (shelter.IsSafe && !hasReachedCover)
-        {
-            hasReachedCover = true;
-            coverTime = elapsed;
-        }
-        if (elapsed >= quakeEnd) End(true, "", "");
+        if (CurrentPhase != Phase.Shaking || elapsed < quakeEnd) return;
+        // Refresh the authoritative crouching/full-body check at the deadline itself.
+        Physics.SyncTransforms();
+        shelter.Evaluate(player);
+        bool win = !isDead && shelter.IsSafe;
+        End(win, win ? "" : "You weren’t under cover when time ran out.");
     }
 
-    void End(bool win, string reason, string loseTip)
+    void End(bool win, string reason)
     {
+        if (CurrentPhase == Phase.Ended) return;
         CurrentPhase = Phase.Ended;
+        if (hud) hud.SetActive(false);
 
-        foreach (var prop in FindObjectsByType<FallingProp>(FindObjectsSortMode.None)) prop.ClearWarning();
+        if (hazards) hazards.CancelPending();
+        else foreach (var prop in FindObjectsByType<FallingProp>(FindObjectsSortMode.None)) prop.ClearWarning();
         shelter.Clear();
         if (feedback) feedback.Clear();
         shake.ResetShake();
@@ -177,25 +167,17 @@ public class EarthquakeDirector : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
-        var sb = new StringBuilder();
-        if (!win) sb.AppendLine(reason).AppendLine();
-        sb.AppendLine("[" + (win ? "x" : " ") + "]  Survive the earthquake");
-        sb.AppendLine("Shelter used: " + (hasReachedCover ? "yes" : "no"));
-        sb.AppendLine("Time to cover: " + (hasReachedCover ? (coverTime - quakeStart).ToString("0.0") + " s after the quake began" : "never"));
-        sb.AppendLine("Time exposed: " + exposedSeconds.ToString("0.0") + " s").AppendLine();
-
-        sb.AppendLine("Drop, cover, and hold on.");
-        if (win) sb.AppendLine(hasReachedCover ? "You survived and used the desk shelter." : "You survived without using the desk shelter.");
-        else sb.AppendLine(loseTip);
-        sb.AppendLine().Append("Press R to retry");
-
         if (resultTitle)
         {
-            resultTitle.text = win ? "YOU SURVIVED" : "NOT THIS TIME";
-            resultTitle.color = win ? new Color(0.4f, 1f, 0.5f) : new Color(1f, 0.45f, 0.4f);
+            resultTitle.text = win ? "You survived" : "You didn’t survive";
+            resultTitle.color = win ? new Color(.75f,.9f,.82f) : new Color(.93f,.76f,.72f);
         }
-        if (resultBody) resultBody.text = sb.ToString();
-        if (resultPanel) resultPanel.SetActive(true);
+        if (resultBody) resultBody.text = win ? "The earthquake has stopped." : reason;
+        if (resultPanel)
+        {
+            resultPanel.transform.SetAsLastSibling();
+            resultPanel.SetActive(true);
+        }
     }
 
     public static AudioClip MakeRumble()

@@ -40,7 +40,7 @@ public static class Verify {
    Require(falling.Settled,"Shelf never settled");
    Require(!Navigate(config.Routes[route],config,player,cc,false),"Fallen bookcase bypassed without jumping");
    Navigate(config.Routes[1-route],config,player,cc,true);
-   var light=scheduler.props[route==0?8:7]; light.Trigger(director);for(int i=0;i<600;i++)Physics.Simulate(.02f);
+   var light=scheduler.props[route==0?8:7]; light.Trigger(director);scheduler.props[9].Trigger(director);for(int i=0;i<600;i++)Physics.Simulate(.02f);
    Navigate(config.Routes[1-route],config,player,cc,true);
    Debug.Log("PASS physical obstruction, no-jump alternate and restart rebuild: seed="+seed);
   }

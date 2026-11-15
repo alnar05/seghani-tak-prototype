@@ -59,7 +59,7 @@ public class FirstPersonCrouchController : MonoBehaviour
 
     void OnControllerColliderHit(ControllerColliderHit hit)
     {
-        var prop = hit.collider.GetComponent<FallingProp>();
+        var prop = hit.collider.GetComponentInParent<FallingProp>();
         if (prop) prop.HitController(hit);
     }
 
@@ -158,14 +158,7 @@ public class FirstPersonCrouchController : MonoBehaviour
 
         verticalVelocity += gravity * Time.deltaTime;
 
-        Vector3 sway = Vector3.zero;
-        if (swayStrength > 0f)
-        {
-            float t = Time.time * 3f;
-            sway = new Vector3(Mathf.PerlinNoise(t, 0.5f) - 0.5f, 0f, Mathf.PerlinNoise(0.5f, t) - 0.5f) * 2f * swayStrength;
-        }
-
-        Vector3 velocity = horizontalVelocity + sway + Vector3.up * verticalVelocity;
+        Vector3 velocity = horizontalVelocity + Vector3.up * verticalVelocity;
         controller.Move(velocity * Time.deltaTime);
     }
 }
