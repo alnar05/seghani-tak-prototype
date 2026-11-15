@@ -1,30 +1,45 @@
+using System;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
-// Shared Tab order and explicit vertical navigation; sliders retain Left/Right adjustment.
+// The menu's vertical order also drives Tab and Shift+Tab.
 public class MenuNavigation : MonoBehaviour
 {
     Selectable[] controls;
+
     void OnEnable()
     {
-        controls = GetComponentsInChildren<Selectable>();
-        var enabledControls = new System.Collections.Generic.List<Selectable>();
-        foreach (var control in controls) if (control.IsInteractable()) enabledControls.Add(control);
-        controls = enabledControls.ToArray();
-        // Position order also covers panels whose controls were constructed in a different order.
-        System.Array.Sort(controls,(a,b) => b.transform.position.y.CompareTo(a.transform.position.y));
-        for (int i=0;i<controls.Length;i++)
-            controls[i].navigation = new Navigation { mode=Navigation.Mode.Explicit,
-                selectOnUp=controls[(i+controls.Length-1)%controls.Length],
-                selectOnDown=controls[(i+1)%controls.Length] };
-        if (controls.Length>0) controls[0].Select();
+        controls = Array.FindAll(GetComponentsInChildren<Selectable>(), control => control.IsInteractable());
+        Array.Sort(controls, (first, second) => second.transform.position.y.CompareTo(first.transform.position.y));
+        for (int i = 0; i < controls.Length; i++)
+        {
+            controls[i].navigation = new Navigation
+            {
+                mode = Navigation.Mode.Explicit,
+                selectOnUp = controls[(i + controls.Length - 1) % controls.Length],
+                selectOnDown = controls[(i + 1) % controls.Length]
+            };
+        }
+
+        if (controls.Length > 0) controls[0].Select();
     }
+
     void Update()
     {
-        if (OverlayMenus.BlocksPause || !Input.GetKeyDown(KeyCode.Tab) || controls.Length==0 || !EventSystem.current) return;
-        int index=System.Array.FindIndex(controls,c=>c.gameObject==EventSystem.current.currentSelectedGameObject);
-        int direction=Input.GetKey(KeyCode.LeftShift)||Input.GetKey(KeyCode.RightShift)?-1:1;
-        controls[(index+direction+controls.Length)%controls.Length].Select();
+        if (!Input.GetKeyDown(KeyCode.Tab) || controls.Length == 0 || !EventSystem.current) return;
+
+        int index = Array.FindIndex(controls, control =>
+            control.gameObject == EventSystem.current.currentSelectedGameObject);
+        bool backwards = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        int direction = backwards ? -1 : 1;
+        if (index < 0) index = backwards ? 0 : -1;
+        controls[(index + direction + controls.Length) % controls.Length].Select();
+    }
+
+    void LateUpdate()
+    {
+        if (controls.Length > 0 && EventSystem.current && !EventSystem.current.currentSelectedGameObject)
+            controls[0].Select();
     }
 }

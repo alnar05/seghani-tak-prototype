@@ -1,27 +1,16 @@
-# Settings and navigation
+# Settings, audio, and navigation
 
-Settings has exactly two sliders, **Master Volume** and **Camera Shake**, plus **Back**.
-Both use PlayerPrefs, save on change and apply immediately, including while paused.
-Old mute/category preferences no longer silently override the master control.
-Internal bus headroom remains .45 earthquake, .50 warning, .28 impact and .20 feedback,
-with a fixed .8 internal category balance. Master zero immediately zeros bound sources.
-Normal unscaled pause/result fades remain; there are no preview sources or test buttons.
+Settings contains **Master Volume**, **Camera Shake**, and **Back**. The sliders display percentages, apply immediately, and save when the panel closes. Master Volume uses the listener’s global volume, so zero silences the rumble, warnings, impacts, and feedback together. Camera Shake zero restores the camera’s rest position, rotation, and field of view. Mouse look, movement, and physical hazards still work at zero.
 
-Camera Shake scales continuous rotation, translation, low-frequency sway, impact kicks
-and the shelter FOV pulse. Sway previously moved the CharacterController independently
-of the slider, which made zero look ineffective and also moved the player. It now
-belongs to the camera's child transform. Zero immediately restores its identity
-transform and base FOV; the parent pivot retains mouse look and crouch height. The
-preference does not change hazard physics, shelter, movement speeds or round timing.
+The quake rumble is synthesized from a continuous loop with several low-frequency partials. The game mixes that sound below brief local creaks, with separate levels for impacts and cover feedback. The settings keep the volume selected by the player through room and menu changes. The listener suspends gameplay audio during Pause and Help, then restores the caller state on return. Results end the round’s sound and movement.
 
-Main Menu, Pause and results use shared button colors, explicit selected states and
-MenuNavigation (Up/Down, Tab/Shift-Tab, Enter/Space). Sliders retain Left/Right adjustment.
-How to Play and Settings save and restore the precise caller state. Opening Settings
-from Pause hides that panel; Back/Esc restores it with time and audio still paused.
-Opening Help during gameplay returns to gameplay. Esc also returns Level Select to
-Main Menu. A consumed-frame guard prevents the closing Esc from also resuming Pause.
-Canvas scaling balances width and height across aspect ratios.
+## Menu controls
 
-See [Level1Validation.md](Level1Validation.md) for actual physics, Play Mode and rendered
-checks. Scripted navigation and captures are not a listening or keyboard-only human
-playtest.
+- The Main Menu offers Play, Level Select, Settings, How to Play, and Quit.
+- Pause offers Resume, How to Play, Settings, Restart Level, and Main Menu.
+- Use Up/Down or Tab/Shift+Tab to change selection and Enter to activate a button. Use Left/Right to change sliders.
+- Esc pauses in a level and backs out of menu overlays. H opens How to Play during an attempt. R retries from a result.
+
+How to Play uses four cards for the goal, movement, cover, and hazards. The cover card shows a crouched player underneath a table. The HUD presents the objective, countdown, and shelter state. Result actions show Retry Level and Main Menu, with Next Level after a win when another room remains.
+
+Earlier scripted engineering checks and renders are logged in [Level1Validation.md](Level1Validation.md). Record current-build listening comfort and keyboard navigation in [Playtest_Notes.md](Playtest_Notes.md).

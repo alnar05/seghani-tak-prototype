@@ -1,5 +1,7 @@
 # Homework 5 feedback follow-up
 
+> Historical follow-up for the earlier digital prototype. See [Level1.md](Level1.md) and [SettingsAndAudio.md](SettingsAndAudio.md) for current rules, settings, and warnings.
+
 ## Audio implemented
 
 - Rumble is a smooth sum of low-frequency integer harmonics, replacing clipped noise.

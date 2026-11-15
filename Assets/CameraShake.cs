@@ -3,46 +3,59 @@ using UnityEngine;
 public class CameraShake : MonoBehaviour
 {
     [Range(0f, 1f)] public float intensity;
-    public float maxAngle = .8f;
-    public float maxOffset = 0.02f;
-    public float frequency = 10f;
+    public float maxAngle = .6f;
+    public float maxOffset = .014f;
+    public float frequency = 7.5f;
 
+    Vector3 restPosition;
+    Quaternion restRotation;
     float kick;
+
+    void Awake()
+    {
+        restPosition = transform.localPosition;
+        restRotation = transform.localRotation;
+    }
 
     public void Kick(float amount) => kick = Mathf.Max(kick, amount);
 
     public void ResetShake()
     {
         intensity = kick = 0f;
-        transform.localRotation = Quaternion.identity;
-        transform.localPosition = Vector3.zero;
+        RestoreCamera();
     }
 
     public void ApplySettings()
     {
-        if (GameAudio.Shake <= 0f)
-        {
-            transform.localRotation = Quaternion.identity;
-            transform.localPosition = Vector3.zero;
-        }
+        if (GameAudio.Shake <= 0f) RestoreCamera();
     }
 
     void LateUpdate()
     {
         kick = Mathf.MoveTowards(kick, 0f, Time.deltaTime * 2.5f);
-        float a = Mathf.Clamp01(intensity + kick) * GameAudio.Shake;
+        float amount = Mathf.Clamp01(intensity + kick) * GameAudio.Shake;
+        if (amount <= 0f)
+        {
+            RestoreCamera();
+            return;
+        }
 
         float t = Time.time * frequency;
-        float nx = Mathf.PerlinNoise(t, 0.1f) - 0.5f;
-        float ny = Mathf.PerlinNoise(t, 10.3f) - 0.5f;
-        float nz = Mathf.PerlinNoise(t, 20.7f) - 0.5f;
+        float x = Mathf.PerlinNoise(t, .1f) - .5f;
+        float y = Mathf.PerlinNoise(t, 10.3f) - .5f;
+        float z = Mathf.PerlinNoise(t, 20.7f) - .5f;
+        var tilt = Quaternion.Euler(x * 2f * maxAngle * amount, y * 2f * maxAngle * amount,
+            z * 1.5f * maxAngle * amount);
+        transform.localRotation = restRotation * tilt;
 
-        transform.localRotation = Quaternion.Euler(nx * 2f * maxAngle * a,
-                                                   ny * 2f * maxAngle * a,
-                                                   nz * 1.5f * maxAngle * a);
-        // Low-frequency earthquake sway belongs to the cosmetic camera, not player locomotion.
         float sway = Mathf.PerlinNoise(Time.time * 3f, .5f) - .5f;
-        transform.localPosition = (new Vector3(ny, nx, 0f) * 2f * maxOffset +
-            Vector3.right * sway * .035f) * a;
+        var offset = new Vector3(y, x, 0f) * 2f * maxOffset + Vector3.right * sway * .012f;
+        transform.localPosition = restPosition + offset * amount;
+    }
+
+    void RestoreCamera()
+    {
+        transform.localRotation = restRotation;
+        transform.localPosition = restPosition;
     }
 }

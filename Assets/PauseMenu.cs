@@ -1,18 +1,13 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
+using UnityEngine.EventSystems;
 
 public class PauseMenu : MonoBehaviour
 {
     public GameObject panel, hud;
     public EarthquakeDirector director;
-
     public bool IsPaused { get; private set; }
 
-    void Awake()
-    {
-        Time.timeScale = 1f;
-        AudioListener.pause = false;
-    }
+    bool RoundEnded => director && director.CurrentPhase == EarthquakeDirector.Phase.Ended;
 
     void Start()
     {
@@ -21,66 +16,38 @@ public class PauseMenu : MonoBehaviour
 
     void Update()
     {
-        if (director && director.CurrentPhase == EarthquakeDirector.Phase.Ended) return;
-
-        if (OverlayMenus.BlocksPause) return;
-
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            if (IsPaused) ResumeGame();
-            else PauseGame();
-        }
+        if (RoundEnded || OverlayMenus.BlocksPause || !Input.GetKeyDown(KeyCode.Escape)) return;
+        if (IsPaused) ResumeGame();
+        else PauseGame();
     }
 
     public void PauseGame()
     {
-        if (director && director.CurrentPhase == EarthquakeDirector.Phase.Ended) return;
+        if (RoundEnded || IsPaused) return;
+
         IsPaused = true;
-        if (hud) hud.SetActive(false);
         Time.timeScale = 0f;
         AudioListener.pause = true;
-        if (panel)
-        {
-            panel.SetActive(true);
-            var first = panel.GetComponentInChildren<UnityEngine.UI.Selectable>();
-            if (first) first.Select();
-        }
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+        if (hud) hud.SetActive(false);
+        if (panel) panel.SetActive(true);
     }
 
     public void ResumeGame()
     {
-        if (director && director.CurrentPhase == EarthquakeDirector.Phase.Ended) return;
+        if (RoundEnded || !IsPaused) return;
+
         IsPaused = false;
-        if (hud) hud.SetActive(true);
-        Time.timeScale = 1f;
-        AudioListener.pause = false;
         if (panel) panel.SetActive(false);
+        if (hud) hud.SetActive(true);
+        if (EventSystem.current) EventSystem.current.SetSelectedGameObject(null);
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
-    }
-
-    public void RestartLevel()
-    {
-        Time.timeScale = 1f;
-        AudioListener.pause = false;
-        GameFlow.Retry();
-    }
-
-    public void QuitGame()
-    {
-        Time.timeScale = 1f;
-        AudioListener.pause = false;
-#if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
-#endif
-        Application.Quit();
-    }
-
-    void OnDestroy()
-    {
         Time.timeScale = 1f;
         AudioListener.pause = false;
     }
+
+    public void RestartLevel() => GameFlow.Retry();
+    public void QuitGame() => GameFlow.Quit();
 }

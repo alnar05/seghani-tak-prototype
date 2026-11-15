@@ -38,6 +38,8 @@ public class FallingProp : MonoBehaviour
         }
     }
     public Transform warningVisual;
+    Quaternion restVisualRotation;
+    Vector3 warningAxis;
     public bool IsWarning { get; private set; }
     public bool HasReleased => triggered;
     public bool HasImpacted => playedImpact;
@@ -51,12 +53,21 @@ public class FallingProp : MonoBehaviour
         if (Committed || owner.CurrentPhase != EarthquakeDirector.Phase.Shaking) return;
         Committed = IsWarning = true; director=owner;
         committedPush = pushImpulse; committedTorque = torqueImpulse;
-        warningStart=now; releaseAt=now+seconds;
+        warningStart = now;
+        releaseAt = now + seconds;
+        if (warningVisual)
+        {
+            restVisualRotation = warningVisual.localRotation;
+            Vector3 axis = Vector3.Cross(Vector3.up, committedPush);
+            if (axis.sqrMagnitude < .001f) axis = committedTorque;
+            if (axis.sqrMagnitude < .001f) axis = transform.right;
+            warningAxis = transform.InverseTransformDirection(axis.normalized);
+        }
         warningAudio=gameObject.AddComponent<AudioSource>();
         warningAudio.playOnAwake=false;
         warningAudio.spatialBlend=.55f; warningAudio.minDistance=4f; warningAudio.maxDistance=18f;
         warningAudio.rolloffMode=AudioRolloffMode.Linear;
-        warningAudio.clip=SafeFeedback.MakeTone("Furniture creak",new[]{260f,340f},.1f,.5f,.35f,4f);
+        warningAudio.clip=GameAudio.MakeCreak();
         GameAudio.Bind(warningAudio,GameAudio.Bus.Warning);
         warningAudio.loop=true; warningAudio.Play();
     }
@@ -70,15 +81,16 @@ public class FallingProp : MonoBehaviour
         float t=now-warningStart;
         if (warningVisual)
         {
-            float envelope=Mathf.Clamp01(t/.25f)*Mathf.Clamp01((releaseAt-now)/.25f);
-            warningVisual.localRotation=Quaternion.Euler(.6f*Mathf.Sin(t*14)*envelope,0,0);
+            float progress = Mathf.Clamp01(t / (releaseAt - warningStart));
+            float lean = Mathf.Clamp01(t / .22f) * (2.5f + progress * 3f + Mathf.Sin(t * 15f) * 2f);
+            warningVisual.localRotation = Quaternion.AngleAxis(lean, warningAxis) * restVisualRotation;
         }
     }
 
     public void ClearWarning()
     {
-        IsWarning=false;
-        if (warningVisual) warningVisual.localRotation=Quaternion.identity;
+        if (IsWarning && warningVisual) warningVisual.localRotation = restVisualRotation;
+        IsWarning = false;
         if (warningAudio) GameAudio.FadeOut(warningAudio);
     }
 

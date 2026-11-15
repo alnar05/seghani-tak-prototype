@@ -1,7 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-[RequireComponent(typeof(BoxCollider))]
 public class SafeZoneTrigger : MonoBehaviour
 {
     public Text objectiveText;
@@ -17,12 +16,25 @@ public class SafeZoneTrigger : MonoBehaviour
 
     public event System.Action<bool> OnSafeChanged;
 
-    BoxCollider box;
+    public BoxCollider[] volumes;
 
-    void Awake()
+    bool Fits(Bounds body)
     {
-        box = GetComponent<BoxCollider>();
-        box.isTrigger = true;
+        // Every shelter is aligned with the building grid, including desks turned 90 degrees.
+        foreach (var box in volumes)
+        {
+            Bounds bounds = box.bounds;
+            if (bounds.Contains(body.min + Vector3.one * .005f) &&
+                bounds.Contains(body.max - Vector3.one * .005f)) return true;
+        }
+        return false;
+    }
+
+    public bool FitsCrouchAt(Vector3 feet, FirstPersonCrouchController player)
+    {
+        float diameter = player.GetComponent<CharacterController>().radius * 2f;
+        var size = new Vector3(diameter, player.crouchHeight, diameter);
+        return Fits(new Bounds(feet + Vector3.up * (size.y * .5f), size));
     }
 
     void Start() => Refresh();
@@ -31,10 +43,7 @@ public class SafeZoneTrigger : MonoBehaviour
     public void Evaluate(FirstPersonCrouchController player)
     {
         var controller = player.GetComponent<CharacterController>();
-        // Require the complete capsule bounds to fit inside the leg-to-leg usable space.
-        Bounds body = controller.bounds, bounds = box.bounds;
-        PlayerInside = bounds.Contains(body.min + Vector3.one*.005f) &&
-                       bounds.Contains(body.max - Vector3.one*.005f);
+        PlayerInside = Fits(controller.bounds);
         SetSafe(listening && player.IsCrouching && PlayerInside);
     }
 
