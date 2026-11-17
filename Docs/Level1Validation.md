@@ -1,4 +1,6 @@
-# Validation record — 15 November 2026
+# Historical Level 1 validation — 15 November 2026
+
+These runs cover the earlier single-room implementation, including its previous warning presentation and menu copy. Current draft gameplay and human playtesting are tracked separately in [Game_Status_and_Final_Plans.md](Game_Status_and_Final_Plans.md) and [Playtest_Notes.md](Playtest_Notes.md).
 
 Unity 2023.1.22f1 runs used a disposable `/tmp/seghani-level1-check` project. Test scripts
 remain outside production Assets in Tools. No test driver ships in gameplay.

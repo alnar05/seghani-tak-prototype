@@ -19,6 +19,9 @@ public class EarthquakeDirector : MonoBehaviour
     
     public GameObject resultPanel, hud;
     public Text resultTitle, resultBody;
+    public Button nextLevelButton;
+    public string levelTitle, orientationTip;
+    public string coverInstruction = Briefing;
 
     [HideInInspector] public bool isDead;
 
@@ -27,7 +30,7 @@ public class EarthquakeDirector : MonoBehaviour
     AudioClip crashClip;
     GameAudio rumbleGain;
     float lastCrash = -1f;
-    public const string Briefing = "Hide under the cover.";
+    public const string Briefing = "Crouch fully under sturdy cover at 0 s.";
 
     float elapsed;
 
@@ -39,7 +42,7 @@ public class EarthquakeDirector : MonoBehaviour
 
     public void KillPlayer(string reason)
     {
-        if (!isDead && CurrentPhase != Phase.Ended)
+        if (!isDead && CurrentPhase == Phase.Shaking)
         {
             isDead = true;
             End(false, reason);
@@ -57,15 +60,13 @@ public class EarthquakeDirector : MonoBehaviour
     void Start()
     {
         shelter.listening = false;
-        shelter.objectiveMessage = Briefing;
-        shelter.safeMessage = Briefing;
-        shelter.Refresh();
+        UpdateObjective();
 
         var ambience = new GameObject("Earthquake ambience");
         ambience.transform.SetParent(transform);
         rumble = ambience.AddComponent<AudioSource>();
         rumble.playOnAwake = false;
-        rumble.clip = MakeRumble();
+        rumble.clip = GameAudio.MakeRumble();
         rumble.loop = true;
         rumble.volume = 0f;
         rumble.spatialBlend = 0f;
@@ -115,24 +116,32 @@ public class EarthquakeDirector : MonoBehaviour
             Mathf.Max(intensity,.05f*Mathf.Clamp01((quakeEnd-elapsed)/2f)) : 0f;
         shake.intensity = sensoryIntensity;
         rumbleGain.SetLevel(sensoryIntensity);
-        if (CurrentPhase == Phase.Shaking)
-        {
-            shelter.objectiveMessage = Briefing + "\n" + Mathf.CeilToInt(quakeEnd - elapsed) + " s remaining";
-            shelter.safeMessage = shelter.objectiveMessage + "  •  In cover";
-            shelter.Refresh();
-        }
-        player.speedMultiplier = 1f;
-        player.swayStrength = 0f;
-        if (hazards) hazards.Tick(elapsed,Time.deltaTime);
+        UpdateObjective();
+        if (hazards) hazards.Tick(elapsed, Time.deltaTime);
 
+    }
+
+    void UpdateObjective()
+    {
+        if (CurrentPhase == Phase.Calm)
+        {
+            int remaining = Mathf.CeilToInt(quakeStart - elapsed);
+            shelter.objectiveMessage = levelTitle + "  ·  Shaking in " + remaining + " s\n" + orientationTip;
+            shelter.safeMessage = shelter.objectiveMessage;
+        }
+        else
+        {
+            int remaining = Mathf.CeilToInt(quakeEnd - elapsed);
+            shelter.objectiveMessage = remaining + " s left  ·  Earthquake\n" + coverInstruction;
+            shelter.safeMessage = remaining + " s left  ·  In cover\nStay crouched until the countdown ends.";
+        }
+        shelter.Refresh();
     }
 
     void BeginQuake()
     {
         CurrentPhase = Phase.Shaking;
         shelter.listening = true;
-        shelter.objectiveMessage = Briefing;
-        shelter.Refresh();
         rumble.Play();
     }
 
@@ -172,7 +181,8 @@ public class EarthquakeDirector : MonoBehaviour
             resultTitle.text = win ? "You survived" : "You didn’t survive";
             resultTitle.color = win ? new Color(.75f,.9f,.82f) : new Color(.93f,.76f,.72f);
         }
-        if (resultBody) resultBody.text = win ? "The earthquake has stopped." : reason;
+        if (resultBody) resultBody.text = win ? "You were in cover when the shaking stopped." : reason;
+        if (nextLevelButton) nextLevelButton.gameObject.SetActive(win && GameFlow.HasNextLevel);
         if (resultPanel)
         {
             resultPanel.transform.SetAsLastSibling();
@@ -180,21 +190,5 @@ public class EarthquakeDirector : MonoBehaviour
         }
     }
 
-    public static AudioClip MakeRumble()
-    {
-        const int sr = 22050;
-        int n = sr * 2;
-        var d = new float[n];
-        // Integer harmonics make a seamless two-second loop with no clipped noise spikes.
-        for (int i = 0; i < n; i++)
-        {
-            float t = i / (float)sr;
-            d[i] = .22f * Mathf.Sin(2f * Mathf.PI * 72f * t) +
-                   .18f * Mathf.Sin(2f * Mathf.PI * 126f * t) +
-                   .12f * Mathf.Sin(2f * Mathf.PI * 213f * t);
-        }
-        var clip = AudioClip.Create("Rumble", n, 1, sr, false);
-        clip.SetData(d, 0);
-        return clip;
-    }
+    public static AudioClip MakeRumble() => GameAudio.MakeRumble();
 }

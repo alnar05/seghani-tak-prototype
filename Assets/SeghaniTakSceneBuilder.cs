@@ -1,8 +1,9 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class SeghaniTakSceneBuilder : MonoBehaviour
+public partial class SeghaniTakSceneBuilder : MonoBehaviour
 {
     public Level1Configuration level = new Level1Configuration();
 
@@ -15,15 +16,11 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     [Header("Materials")]
     public Material baseMaterial;
 
-    [Header("Desk")]
-    public float deskTopHeight = 1.0f;
-
-
     Transform root;
-    Text objectiveText, stanceText, resultTitle, resultBody;
+    Text objectiveText, stanceText, resultTitle, resultBody, interactionText;
     Image vignette;
     GameObject resultPanel, pausePanel, hudRoot;
-    Button resumeButton, restartButton, quitButton;
+    Button nextButton;
 
     FirstPersonCrouchController playerCtrl;
     Camera playerCam;
@@ -31,207 +28,54 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
     SafeZoneTrigger safeZone;
     SafeFeedback safeFeedback;
     EarthquakeDirector director;
-    FallingProp frameProp, lampProp, shelfProp, windowProp, tvProp, spawnLightProp, northShelf, southCaution, northCaution, approachPanel;
-    BoxCollider eastWall;
+    readonly Dictionary<Color, Material> paints = new Dictionary<Color, Material>();
+    readonly List<Material> runtimeMaterials = new List<Material>();
 
     void Awake()
     {
         bool menuBackdrop = !GameFlow.Playing;
+        int index = menuBackdrop ? 0 : GameFlow.SelectedLevelIndex;
+        if (index != 0 || level == null) level = LevelCatalog.Create(index);
         roomWidth = level.roomSize.x;
         roomDepth = level.roomSize.z;
         roomHeight = level.roomSize.y;
         foreach (var cam in Camera.allCameras) Destroy(cam.gameObject);
 
-        root = new GameObject("Level1_Generated").transform;
-        BuildRoom();
-        Transform desk = BuildDesk();
-        BuildFurniture();
+        root = new GameObject(LevelCatalog.Names[index]).transform;
+        BuildLayout(index);
         if (menuBackdrop)
         {
-            // The menu shows the same room, furniture and shelter as the playable level.
             var view = new GameObject("Menu room camera").AddComponent<Camera>();
-            view.transform.position = new Vector3(5.45f, 2.35f, -3.1f);
-            view.transform.LookAt(new Vector3(1.1f, 1f, 1.3f));
-            view.fieldOfView = 68f;
+            view.transform.position = new Vector3(5.45f, 2.27f, -3.11f);
+            view.transform.LookAt(new Vector3(1.96f, 1.05f, 1.18f));
+            view.fieldOfView = 69f;
             gameObject.AddComponent<GameFlow>();
             return;
         }
+        BuildPauseController();
         BuildUI();
         BuildPlayer();
-        BuildSafeZone(desk, objectiveText);
+        safeZone = new GameObject("Shelter Check").AddComponent<SafeZoneTrigger>();
+        safeZone.volumes = shelters.ToArray();
+        safeZone.objectiveText = objectiveText;
         BuildFeedback();
-        BuildDirector();
-        BuildPause();
+        BuildDirector(index);
+        pause.director = director;
+        pause.panel = pausePanel;
+        pause.hud = hudRoot;
+        if (houseInteractions) houseInteractions.Initialize(playerCtrl, director, interactionText);
     }
 
-    void BuildRoom()
+    void OnDestroy()
     {
-        float W = roomWidth, D = roomDepth, H = roomHeight, T = wallThickness;
-        Color wall = new Color(.82f,.78f,.70f);
-        Box("Floor", new Vector3(0,-.05f,0), new Vector3(W+2*T,.1f,D+2*T), new Color(.35f,.25f,.18f));
-        Box("Ceiling", new Vector3(0,H+.05f,0), new Vector3(W+2*T,.1f,D+2*T), Color.gray);
-        Box("Outer_South", new Vector3(0,H/2,-D/2-T/2), new Vector3(W+2*T,H,T), wall);
-        Box("Outer_North", new Vector3(0,H/2,D/2+T/2), new Vector3(W+2*T,H,T), wall);
-        Box("Outer_West", new Vector3(-W/2-T/2,H/2,0), new Vector3(T,H,D), wall);
-        eastWall = Box("Outer_East", new Vector3(W/2+T/2,H/2,0), new Vector3(T,H,D), wall).GetComponent<BoxCollider>();
-        // Two 1.8 m-wide, 2.3 m-high openings in each room/passsage partition.
-        foreach (float x in new[] {-2f,2f})
-        {
-            Box("Partition_South", new Vector3(x,H/2,-3.025f), new Vector3(T,H,.95f), wall);
-            Box("Partition_Center", new Vector3(x,H/2,0), new Vector3(T,H,1.5f), wall);
-            Box("Partition_North", new Vector3(x,H/2,3.025f), new Vector3(T,H,.95f), wall);
-            foreach (float z in new[] {-1.65f,1.65f})
-                Box("Door_Lintel", new Vector3(x,(H+2.3f)/2,z), new Vector3(T,H-2.3f,1.8f),
-                    x > 0 ? new Color(.35f,.55f,.4f) : wall);
-        }
-        Box("Passage_Divider", new Vector3(0,H/2,0), new Vector3(4,H,.8f), wall);
-        foreach (float z in new[] {-2.8f,2.8f})
-            Box("Passage_Outer", new Vector3(0,H/2,z), new Vector3(4,H,T), wall);
-        // Seal unused strips: no narrow accidental paths behind the passage walls.
-        foreach (float z in new[] {-3.2f,3.2f})
-            Box("Passage_Void", new Vector3(0,H/2,z), new Vector3(4,H,.6f), wall);
-        foreach (var position in new[] {new Vector3(-4,H-.4f,0), new Vector3(0,H-.4f,-1.65f),
-            new Vector3(0,H-.4f,1.65f), new Vector3(4.8f,H-.4f,0)})
-        {
-            var lightGO = new GameObject("Room_Light"); lightGO.transform.SetParent(root,false);
-            lightGO.transform.localPosition = position;
-            var light = lightGO.AddComponent<Light>(); light.type = LightType.Point;
-            light.range = 6f; light.intensity = 1.1f;
-        }
-    }
-
-    GameObject DeskPart(Transform desk, string name, Vector3 position, Vector3 size, Color color)
-    {
-        var part = GameObject.CreatePrimitive(PrimitiveType.Cube); part.name = name;
-        part.transform.SetParent(desk,false); part.transform.localPosition = position;
-        part.transform.localScale = size; Tint(part,color); return part;
-    }
-
-    Transform BuildDesk()
-    {
-        var desk = new GameObject("Desk").transform; desk.SetParent(root,false);
-        const float width=2f, depth=1.2f, leg=.08f;
-        var wood = new Color(.62f,.40f,.20f);
-        DeskPart(desk,"Desk_Top",new Vector3(0,deskTopHeight+.05f,0),new Vector3(width,.1f,depth),wood);
-        foreach (float x in new[] {-1f,1f}) foreach (float z in new[] {-1f,1f})
-            DeskPart(desk,"Desk_Leg",new Vector3(x*(width-leg)/2,deskTopHeight/2,z*(depth-leg)/2),
-                new Vector3(leg,deskTopHeight,leg),wood);
-        Physics.SyncTransforms();
-        // Derive placement from the actual generated east wall, including any configured room size.
-        desk.position = new Vector3(eastWall.bounds.min.x-depth/2-.3f,0,0);
-        desk.rotation = Quaternion.Euler(0,90,0);
-        level.SetDeskPosition(desk.position,desk.position.x-depth/2);
-        return desk;
-    }
-
-    void ValidateDesk(Transform desk)
-    {
-        Physics.SyncTransforms();
-        foreach (var part in desk.GetComponentsInChildren<BoxCollider>())
-        {
-            if (part.bounds.max.x > eastWall.bounds.min.x-.25f)
-                Debug.LogError("Desk part/trigger lacks wall clearance: " + part.name);
-            if (Physics.ComputePenetration(part,part.transform.position,part.transform.rotation,
-                eastWall,eastWall.transform.position,eastWall.transform.rotation,out _,out _))
-                Debug.LogError("Desk intersects world-space wall: " + part.name);
-        }
-        var feet = desk.position + Vector3.up*.03f;
-        foreach (var hit in Physics.OverlapCapsule(feet+Vector3.up*.3f,feet+Vector3.up*(playerCtrl.crouchHeight-.3f),
-            .3f,~0,QueryTriggerInteraction.Ignore))
-            if (hit.gameObject != playerCtrl.gameObject) Debug.LogError("Desk crouch access obstructed by " + hit.name);
-    }
-
-    void BuildFurniture()
-    {
-        Color wood = new Color(.55f,.40f,.25f), dark = new Color(.3f,.2f,.12f);
-        Box("Couch", new Vector3(-3.4f,.4f,-3f), new Vector3(1.6f,.8f,.65f), new Color(.25f,.38f,.42f));
-        Box("TV_Stand", new Vector3(-3.4f,.25f,2.9f), new Vector3(1.4f,.5f,.5f), dark);
-        var entry = Box("EntryCeilingLight", new Vector3(-5,2.55f,-1.65f), new Vector3(.7f,.25f,.7f), Color.yellow);
-        spawnLightProp = MakeProp(entry,5f,"Falling entry light",Vector3.zero,Vector3.zero);
-        spawnLightProp.routeObstacle = false;
-        entry.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezeRotation;
-        var frame = Box("PictureFrame", new Vector3(-5.97f,1.7f,2.7f), new Vector3(.04f,.45f,.6f), wood);
-        frameProp = MakeProp(frame,1f,"Picture frame",new Vector3(.5f,0,0),Vector3.zero);
-        var lamp = Shape(PrimitiveType.Sphere,"CeilingLamp",new Vector3(3,2.55f,-2.7f),Vector3.one*.4f,Color.yellow);
-        lampProp = MakeProp(lamp,3f,"Falling lamp",Vector3.zero,Vector3.zero);
-        shelfProp = BuildBookcase(-1);
-        northShelf = BuildBookcase(1);
-        southCaution = BuildCautionLight(-1);
-        northCaution = BuildCautionLight(1);
-        approachPanel = BuildFixture("Shelter approach ceiling light", new Vector3(3.35f,2.75f,0), new Vector3(.7f,.16f,1.5f));
-        var pane = Box("WindowPane",new Vector3(-5.97f,1.6f,-2.8f),new Vector3(.04f,1.2f,1.2f),new Color(.6f,.8f,.95f));
-        windowProp = MakeProp(pane,4f,"Falling window pane",new Vector3(1.2f,0,0),Vector3.zero);
-        var tv = Box("TV",new Vector3(-3.4f,.85f,2.9f),new Vector3(1.1f,.7f,.1f),new Color(.08f,.08f,.1f));
-        tvProp = MakeProp(tv,12f,"Falling TV",new Vector3(0,0,6f),new Vector3(3f,0,0));
-    }
-
-    FallingProp BuildBookcase(int side)
-    {
-        var wood=new Color(.3f,.2f,.12f);
-        string route=side<0?"South":"North";
-        var shelf=new GameObject(route+"_Bookshelf"); shelf.transform.SetParent(root,false);
-        shelf.transform.localPosition=new Vector3(1,.95f,side*2.325f);
-        // One unscaled rigid body. Both visible sections move together; no static pedestal or joint.
-        var lower=shelf.AddComponent<BoxCollider>(); lower.center=new Vector3(0,-.775f,0);
-        lower.size=new Vector3(1.7f,.35f,.65f);
-        var upper=shelf.AddComponent<BoxCollider>(); upper.center=new Vector3(0,.175f,0);
-        upper.size=new Vector3(1.7f,1.55f,.65f);
-        var model=new GameObject("Bookcase_Model").transform; model.SetParent(shelf.transform,false);
-        DeskPart(model,"Cabinet_Base",new Vector3(0,-.775f,0),lower.size,wood);
-        DeskPart(model,"Bookcase_Upper",new Vector3(0,.175f,0),upper.size,wood);
-        foreach(var collider in model.GetComponentsInChildren<Collider>()) DestroyImmediate(collider);
-        foreach(float y in new[]{-.4f,.2f,.7f}) for(int book=0;book<5;book++)
-        {
-            var spine=DeskPart(model,"Book_Front",new Vector3(-.7f+book*.3f,y,-side*.335f),
-                new Vector3(.24f,.35f,.02f),new Color(.35f+book*.08f,.3f,.2f+book*.06f));
-            DestroyImmediate(spine.GetComponent<Collider>());
-        }
-        var prop=MakeProp(shelf,50,route+" passage bookshelf",new Vector3(0,0,-side*35),new Vector3(-side*12,0,0));
-        prop.pushPointLocal=new Vector3(0,.85f,0);
-        prop.warningVisual=model;
-        var body=shelf.GetComponent<Rigidbody>();
-        body.interpolation=RigidbodyInterpolation.Interpolate;
-        body.solverIterations=12; body.solverVelocityIterations=4;
-        body.maxDepenetrationVelocity=2f;
-        return prop;
-    }
-
-    FallingProp BuildCautionLight(int side) => BuildFixture(
-        side < 0 ? "South passage ceiling light" : "North passage ceiling light",
-        new Vector3(3.05f,2.75f,side*1.65f), new Vector3(1f,.16f,1.25f));
-
-    FallingProp BuildFixture(string name, Vector3 position, Vector3 size)
-    {
-        // A single visible metal housing collider, clear of bookcases and door lintels.
-        var housing = Box(name,position,size,new Color(.22f,.26f,.28f));
-        var model = new GameObject("Light diffuser").transform;
-        model.SetParent(housing.transform,false);
-        var diffuser = DeskPart(model,"Warm diffuser",new Vector3(0,-.53f,0),new Vector3(.86f,.06f,.85f),new Color(1f,.91f,.67f));
-        DestroyImmediate(diffuser.GetComponent<Collider>());
-        var prop = MakeProp(housing,5,name,Vector3.zero,Vector3.zero);
-        prop.routeObstacle = false;
-        // A flat housing falls vertically and remains a stepable, physical floor object.
-        housing.GetComponent<Rigidbody>().constraints = RigidbodyConstraints.FreezeRotation;
-        prop.warningVisual = model;
-        return prop;
-    }
-
-    FallingProp MakeProp(GameObject go, float mass, string label,
-                         Vector3 impulse, Vector3 torque)
-    {
-        var rb = go.AddComponent<Rigidbody>();
-        rb.mass = mass;
-        var fp = go.AddComponent<FallingProp>();
-        fp.label = label;
-        fp.pushImpulse = impulse;
-        fp.torqueImpulse = torque;
-        return fp;
+        foreach (var material in runtimeMaterials) Destroy(material);
+        if (floorGrain) Destroy(floorGrain);
     }
 
     void BuildPlayer()
     {
         var player = new GameObject("Player");
-        player.transform.position = Level1Configuration.SpawnPosition + Vector3.up * .1f;
+        player.transform.position = level.spawn + Vector3.up * .06f;
         player.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
 
         var cc = player.AddComponent<CharacterController>();
@@ -266,25 +110,6 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         playerCam = cam;
     }
 
-    void BuildSafeZone(Transform desk, Text objective)
-    {
-        var zone = new GameObject("SafeZone_UnderDesk");
-        zone.transform.SetParent(desk, false);
-        zone.transform.localPosition = new Vector3(0f, deskTopHeight / 2f, 0f);
-
-        var box = zone.AddComponent<BoxCollider>();
-        box.isTrigger = true;
-        box.size = new Vector3(1.84f, deskTopHeight, 1.04f);
-
-        var rb = zone.AddComponent<Rigidbody>();
-        rb.isKinematic = true;
-
-        var sz = zone.AddComponent<SafeZoneTrigger>();
-        sz.objectiveText = objective;
-        safeZone = sz;
-        ValidateDesk(desk);
-    }
-
     void BuildFeedback()
     {
         var fb = new GameObject("Feedback").AddComponent<SafeFeedback>();
@@ -295,11 +120,9 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         fb.zone = safeZone;
         fb.player = playerCtrl;
         fb.cam = playerCam;
-        
-
     }
 
-    void BuildDirector()
+    void BuildDirector(int index)
     {
         var go = new GameObject("EarthquakeDirector");
         director = go.AddComponent<EarthquakeDirector>();
@@ -311,6 +134,10 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         director.resultPanel = resultPanel;
         director.resultTitle = resultTitle;
         director.resultBody = resultBody;
+        director.nextLevelButton = nextButton;
+        director.levelTitle = LevelCatalog.Names[index];
+        director.orientationTip = level.orientationTip;
+        director.coverInstruction = level.coverInstruction;
 
         director.quakeStart = level.explorationSeconds;
         director.quakeEnd = level.explorationSeconds + level.shakingSeconds;
@@ -318,21 +145,16 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         hazards.director = director;
         director.hazards = hazards;
         hazards.configuration = level;
-        hazards.props = new[] { frameProp, lampProp, shelfProp, windowProp, tvProp, spawnLightProp, northShelf, southCaution, northCaution, approachPanel };
-        level.AuthorHazards(hazards.props);
-        level.ValidateRoutes(playerCtrl);
+        hazards.props = props.ToArray();
+        hazards.cues = cues;
+        hazards.floorHeights = index < 3 ? new[] { 0f } : new[] { 0f, Level1Configuration.UpperFloor };
     }
 
-    void BuildPause()
-    {
-        var pm = new GameObject("PauseMenu").AddComponent<PauseMenu>();
-        pm.panel = pausePanel;
-        pm.hud = hudRoot;
-        pm.director = director;
+    PauseMenu pause;
 
-        resumeButton.onClick.AddListener(pm.ResumeGame);
-        restartButton.onClick.AddListener(pm.RestartLevel);
-        quitButton.onClick.AddListener(GameFlow.MainMenu);
+    void BuildPauseController()
+    {
+        pause = new GameObject("PauseMenu").AddComponent<PauseMenu>();
 
         if (EventSystem.current == null)
         {
@@ -351,9 +173,9 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         var scaler = canvasGO.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = .5f;
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
 
-        Font font = Font.CreateDynamicFontFromOSFont("Arial", 36);
+        Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         Transform ct = canvasGO.transform;
         hudRoot = new GameObject("Gameplay HUD",typeof(RectTransform));
         hudRoot.transform.SetParent(ct,false);
@@ -365,63 +187,62 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
         Sprite vig = MakeVignetteSprite();
         vignette = MakeFullscreenImage(hud, "SafeVignette", vig, new Color(0.3f, 1f, 0.45f, 0f));
 
-        objectiveText = MakeText(hud, "ObjectiveText", font, 28, TextAnchor.UpperCenter,
-                                 new Vector2(0.5f, 1f), new Vector2(0f, -40f), new Vector2(1400, 120));
-        objectiveText.fontStyle = FontStyle.Bold;
+        var objectiveCard = MakePanel(hud, "Objective card", new Color(.033f, .052f, .056f, .83f));
+        var objectiveRect = objectiveCard.GetComponent<RectTransform>();
+        objectiveRect.anchorMin = objectiveRect.anchorMax = objectiveRect.pivot = new Vector2(.5f, 1f);
+        objectiveRect.anchoredPosition = new Vector2(0f, -27f);
+        objectiveRect.sizeDelta = new Vector2(850f, 110f);
+        objectiveCard.GetComponent<Image>().raycastTarget = false;
+        objectiveText = MakeText(objectiveCard.transform, "ObjectiveText", font, 27, TextAnchor.MiddleCenter,
+            new Vector2(.5f, .5f), Vector2.zero, new Vector2(810f, 100f));
         objectiveText.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-        stanceText = MakeText(hud, "StanceText", font, 30, TextAnchor.LowerCenter,
-                              new Vector2(0.5f, 0f), new Vector2(0f, 25f), new Vector2(900, 50));
+        stanceText = MakeText(hud, "StanceText", font, 20, TextAnchor.LowerCenter,
+            new Vector2(.5f, 0f), new Vector2(0f, 26f), new Vector2(820f, 42f));
+        if (houseInteractions)
+        {
+            interactionText = MakeText(hud, "Nearby interaction", font, 24, TextAnchor.LowerCenter,
+                new Vector2(.5f, 0f), new Vector2(0f, 74f), new Vector2(900f, 40f));
+            interactionText.color = MenuTheme.Accent;
+        }
+        var helpHint = MakeText(hud, "Help shortcut", font, 21, TextAnchor.UpperRight,
+            new Vector2(1f, 1f), new Vector2(-26f, -22f), new Vector2(270f, 48f));
+        helpHint.text = "H  How to Play";
+        helpHint.color = MenuTheme.Muted;
 
-        resultPanel = MakePanel(ct, "ResultPanel", new Color(.015f,.025f,.03f,.72f));
-        var resultCard = MakePanel(resultPanel.transform, "ResultCard", new Color(.075f,.115f,.13f,.98f));
-        var cardRect = resultCard.GetComponent<RectTransform>();
-        cardRect.anchorMin = cardRect.anchorMax = new Vector2(.5f,.5f);
-        cardRect.anchoredPosition = Vector2.zero;
-        cardRect.sizeDelta = new Vector2(920,650);
-        var border = resultCard.AddComponent<Outline>();
-        border.effectColor = new Color(.3f,.42f,.43f,.5f);
-        border.effectDistance = new Vector2(1,-1);
+        resultPanel = MakePanel(ct, "ResultPanel", MenuTheme.Backdrop);
+        var resultCard = MenuTheme.Card(resultPanel.transform, "ResultCard", Vector2.zero,
+            new Vector2(892f, 548f), MenuTheme.Surface);
+        resultTitle = MenuTheme.Label(resultCard.transform, font, "", 57, TextAnchor.MiddleCenter,
+            new Vector2(0f, 166f), new Vector2(780f, 86f), MenuTheme.Text, true);
+        resultBody = MenuTheme.Label(resultCard.transform, font, "", 27, TextAnchor.MiddleCenter,
+            new Vector2(0f, 91f), new Vector2(744f, 78f), MenuTheme.Muted);
 
-        resultTitle = MakeText(resultCard.transform, "ResultTitle", font, 56, TextAnchor.MiddleCenter,
-                               new Vector2(.5f,.5f), new Vector2(0,185), new Vector2(800,90));
-        resultTitle.fontStyle = FontStyle.Bold;
-        resultBody = MakeText(resultCard.transform, "ResultBody", font, 30, TextAnchor.MiddleCenter,
-                              new Vector2(.5f,.5f), new Vector2(0,65), new Vector2(760,130));
-        resultBody.horizontalOverflow = HorizontalWrapMode.Wrap;
-        resultBody.color = new Color(.78f,.83f,.84f);
-        MakeButton(resultCard.transform, "Retry Level", font, new Vector2(0,-90)).onClick.AddListener(GameFlow.Retry);
-        MakeButton(resultCard.transform, "Main Menu", font, new Vector2(0,-200)).onClick.AddListener(GameFlow.MainMenu);
-        var resultHint = MakeText(resultCard.transform, "ResultControls", font, 22, TextAnchor.MiddleCenter,
-            new Vector2(.5f,.5f), new Vector2(0,-280), new Vector2(800,40));
-        resultHint.text = "R to retry  •  ↑ ↓ / Tab to select  •  Enter to confirm";
-        resultHint.color = new Color(.6f,.69f,.71f);
+        nextButton = MenuTheme.Button(resultCard.transform, font, "Next Level", new Vector2(0f, -5f),
+            new Vector2(440f, 65f), GameFlow.NextLevel, true);
+        MenuTheme.Button(resultCard.transform, font, "Retry Level", new Vector2(0f, -90f),
+            new Vector2(440f, 65f), GameFlow.Retry);
+        MenuTheme.Button(resultCard.transform, font, "Main Menu", new Vector2(0f, -175f),
+            new Vector2(440f, 65f), GameFlow.MainMenu);
         resultPanel.SetActive(false);
 
-        pausePanel = MakePanel(ct, "PausePanel", new Color(0, 0, 0, 0.72f));
-        Text pauseTitle = MakeText(pausePanel.transform, "PauseTitle", font, 80, TextAnchor.MiddleCenter,
-                                   new Vector2(0.5f, 0.5f), new Vector2(0f, 260f), new Vector2(1000, 120));
-        pauseTitle.text = "PAUSED";
-        pauseTitle.fontStyle = FontStyle.Bold;
-        resumeButton = MakeButton(pausePanel.transform, "Resume", font, new Vector2(0f, 140f));
-        restartButton = MakeButton(pausePanel.transform, "Restart Level", font, new Vector2(0f, -190f));
-        quitButton = MakeButton(pausePanel.transform, "Main Menu", font, new Vector2(0f, -300f));
-        
-        Text hint = MakeText(pausePanel.transform, "ControlsHint", font, 24, TextAnchor.MiddleCenter,
-                             new Vector2(0.5f, 0f), new Vector2(0f, 40f), new Vector2(1400, 40));
-        hint.text = Level1Configuration.MovementHint + (level.allowJump ? "   Space: jump" : "") + "   C / Ctrl: crouch   Esc: pause";
-        hint.color = new Color(1, 1, 1, 0.75f);
-        
-        MakeButton(pausePanel.transform, "Settings", font, new Vector2(0,-80)).onClick.AddListener(() => OverlayMenus.Settings(pausePanel));
-        MakeButton(pausePanel.transform, "How to play", font, new Vector2(0,30)).onClick.AddListener(() => OverlayMenus.Help(pausePanel));
-        var help = MakeButton(hud, "How to play (H)", font, Vector2.zero);
-        var helpRect = help.GetComponent<RectTransform>();
-        helpRect.anchorMin = helpRect.anchorMax = new Vector2(1,1);
-        helpRect.anchoredPosition = new Vector2(-160,-200);
-        helpRect.sizeDelta = new Vector2(280,60);
-        var helpLabel = help.GetComponentInChildren<Text>();
-        helpLabel.fontSize = 28; helpLabel.rectTransform.sizeDelta = new Vector2(280,60);
-        help.onClick.AddListener(() => OverlayMenus.Help());
+        pausePanel = MakePanel(ct, "PausePanel", MenuTheme.Backdrop);
+        var pauseCard = MenuTheme.Card(pausePanel.transform, "Pause card", Vector2.zero,
+            new Vector2(690f, 740f), MenuTheme.Surface);
+        MenuTheme.Label(pauseCard.transform, font, "Paused", 64, TextAnchor.MiddleCenter,
+            new Vector2(0f, 259f), new Vector2(630f, 106f), MenuTheme.Text, true);
+        MenuTheme.Button(pauseCard.transform, font, "Resume", new Vector2(0f, 141f),
+            new Vector2(480f, 70f), pause.ResumeGame, true);
+        MenuTheme.Button(pauseCard.transform, font, "How to Play", new Vector2(0f, 50f),
+            new Vector2(480f, 70f), () => OverlayMenus.Help(pausePanel));
+        MenuTheme.Button(pauseCard.transform, font, "Settings", new Vector2(0f, -41f),
+            new Vector2(480f, 70f), () => OverlayMenus.Settings(pausePanel));
+        MenuTheme.Button(pauseCard.transform, font, "Restart Level", new Vector2(0f, -132f),
+            new Vector2(480f, 70f), pause.RestartLevel);
+        MenuTheme.Button(pauseCard.transform, font, "Main Menu", new Vector2(0f, -223f),
+            new Vector2(480f, 70f), GameFlow.MainMenu);
+        MenuTheme.Label(pauseCard.transform, font, MenuTheme.NavigationHint, 20, TextAnchor.MiddleCenter,
+            new Vector2(0f, -304f), new Vector2(600f, 40f), MenuTheme.Muted);
         var overlay = canvasGO.AddComponent<OverlayMenus>();
         overlay.Initialize(font);
         pausePanel.AddComponent<MenuNavigation>();
@@ -539,10 +360,14 @@ public class SeghaniTakSceneBuilder : MonoBehaviour
 
     void Tint(GameObject go, Color c)
     {
-        var r = go.GetComponent<Renderer>();
-        if (baseMaterial) r.sharedMaterial = new Material(baseMaterial);
-        var m = r.material;
-        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
-        if (m.HasProperty("_Color")) m.SetColor("_Color", c);
+        if (!paints.TryGetValue(c, out var material))
+        {
+            material = baseMaterial ? new Material(baseMaterial) : new Material(Shader.Find("Standard"));
+            material.SetColor("_Color", c);
+            material.SetFloat("_Glossiness", .18f);
+            paints.Add(c, material);
+            runtimeMaterials.Add(material);
+        }
+        go.GetComponent<Renderer>().sharedMaterial = material;
     }
 }

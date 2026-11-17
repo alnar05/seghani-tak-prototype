@@ -48,8 +48,8 @@ public class SafeFeedback : MonoBehaviour
 
         if (Time.unscaledTime - lastSound > .3f)
         { audioSrc.PlayOneShot(chime); lastSound = Time.unscaledTime; }
-        vignetteAlpha = 0.7f;
-        fovKick = 6f;
+        vignetteAlpha = 0.20f;
+        fovKick = 2.5f;
 
         if (burst && player)
         {
@@ -80,13 +80,13 @@ public class SafeFeedback : MonoBehaviour
         if (objectiveText && popT < 1f)
         {
             popT = Mathf.Min(1f, popT + Time.deltaTime / 0.5f);
-            float s = 1f + 0.35f * Mathf.Sin(popT * Mathf.PI);
+            float s = 1f + 0.05f * Mathf.Sin(popT * Mathf.PI);
             objectiveText.rectTransform.localScale = Vector3.one * s;
         }
 
         if (vignette && zone)
         {
-            float target = zone.IsSafe ? 0.25f : 0f;
+            float target = zone.IsSafe ? 0.14f : 0f;
             vignetteAlpha = Mathf.MoveTowards(vignetteAlpha, target, Time.deltaTime * 0.9f);
             Color c = VignetteGreen;
             c.a = vignetteAlpha;

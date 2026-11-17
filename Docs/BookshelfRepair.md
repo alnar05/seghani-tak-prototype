@@ -1,6 +1,6 @@
 # Bookshelf sequence and physics repair
 
-> Historical bookshelf-only pass. The current challenge, fixture and menu changes are documented in [Level1.md](Level1.md) and [Level1Validation.md](Level1Validation.md).
+> Historical bookshelf-only pass. [Level1.md](Level1.md) covers the current room and [Level1Validation.md](Level1Validation.md) records earlier engineering checks.
 
 This pass changes only event timing, the bookcase assembly and supporting checks.
 Layout, walking speeds, jump configuration, reaction durations, menus, Settings,

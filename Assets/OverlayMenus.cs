@@ -1,165 +1,227 @@
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.EventSystems;
-using System.Collections.Generic;
+using UnityEngine.UI;
 
-// Modal screens restore the exact caller state: gameplay, pause menu, or main menu.
 public class OverlayMenus : MonoBehaviour
 {
     static OverlayMenus instance;
     static int consumedFrame = -1;
-    public static bool BlocksPause => (instance && instance.open) || consumedFrame == Time.frameCount;
-    GameObject screen, caller, hud;
-    bool savedHud;
-    GameObject previousSelection;
+    public static bool BlocksPause => (instance && instance.screen) || consumedFrame == Time.frameCount;
+
+    GameObject screen, caller, hud, previousSelection;
     Font font;
     float savedTime;
-    bool savedAudio, savedCursor;
-    CursorLockMode savedLock;
-    bool open;
-    readonly List<Selectable> navigation = new List<Selectable>();
-    bool settings;
+    bool savedAudioPause, savedCursorVisible, savedHud;
+    CursorLockMode savedCursorLock;
 
-    public void Initialize(Font uiFont) { instance = this; font = uiFont; }
+    public void Initialize(Font uiFont)
+    {
+        instance = this;
+        font = uiFont;
+    }
+
     public static void Help(GameObject caller = null)
     {
         var director = FindFirstObjectByType<EarthquakeDirector>();
-        if (director && director.CurrentPhase == EarthquakeDirector.Phase.Ended) return;
-        if (instance) instance.Show(false, caller);
+        if (instance && (!director || director.CurrentPhase != EarthquakeDirector.Phase.Ended))
+            instance.Show(false, caller);
     }
-    public static void Settings(GameObject caller) { if (instance) instance.Show(true, caller); }
 
-    void Show(bool isSettings, GameObject from)
+    public static void Settings(GameObject caller)
     {
-        if (open) return;
+        if (instance) instance.Show(true, caller);
+    }
+
+    void Show(bool settings, GameObject from)
+    {
+        if (screen || consumedFrame == Time.frameCount) return;
+
         consumedFrame = Time.frameCount;
-        open = true; settings = isSettings; caller = from;
-        savedTime = Time.timeScale; savedAudio = AudioListener.pause;
-        savedLock = Cursor.lockState; savedCursor = Cursor.visible;
+        caller = from;
         previousSelection = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
-        Time.timeScale = 0f; AudioListener.pause = true;
-        Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
+        savedTime = Time.timeScale;
+        savedAudioPause = AudioListener.pause;
+        savedCursorLock = Cursor.lockState;
+        savedCursorVisible = Cursor.visible;
+        Time.timeScale = 0f;
+        AudioListener.pause = true;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
         if (caller) caller.SetActive(false);
         var pause = FindFirstObjectByType<PauseMenu>();
         hud = pause ? pause.hud : null;
-        if (hud) { savedHud = hud.activeSelf; hud.SetActive(false); }
-        Build();
+        savedHud = hud && hud.activeSelf;
+        if (hud) hud.SetActive(false);
+
+        string title = settings ? "Settings" : "How to Play";
+        screen = SeghaniTakSceneBuilder.MakePanel(transform, title + " Overlay", MenuTheme.Backdrop);
+        var card = MenuTheme.Card(screen.transform, title, Vector2.zero,
+            settings ? new Vector2(850f, 648f) : new Vector2(1400f, 976f), MenuTheme.Surface);
+        var parent = card.transform;
+        MenuTheme.Label(parent, font, title, 56, TextAnchor.MiddleLeft,
+            new Vector2(0f, settings ? 233f : 405f),
+            new Vector2(settings ? 722f : 1272f, 96f), MenuTheme.Text, true);
+
+        if (settings) BuildSettings(parent);
+        else BuildHelp(parent);
+
+        screen.AddComponent<MenuNavigation>();
     }
 
-    void Build()
+    void BuildSettings(Transform parent)
     {
-        navigation.Clear();
-        screen = SeghaniTakSceneBuilder.MakePanel(transform, settings ? "Settings" : "How to play", new Color(.06f,.08f,.11f,.99f));
-        TextAt(settings ? "SETTINGS" : "HOW TO PLAY", 440, 52, 100);
-        if (settings)
-        {
-            AddSlider("Master Volume", GameAudio.MasterKey, GameAudio.Master, 150);
-            AddSlider("Camera Shake", "camera.shake", GameAudio.Shake, -10);
-        }
-        else
-        {
-            HelpCard("Goal", "SURVIVE", EarthquakeDirector.Briefing, -420, 170);
-            HelpCard("Movement", "W A S D  /  ARROWS", "Move • Mouse to look • Esc to pause", 420, 170);
-            HelpCard("Take Cover", "C  /  CTRL", "Hold to crouch under the sturdy desk.\nStay under it for protection.", -420, -100);
-            HelpCard("Watch for Hazards", "!  →  WAIT / MOVE", "Listen for creaking and watch for movement.\nStop or retreat before an object falls.\nCheck the debris before continuing.", 420, -100);
-        }
-        AddButton("Back", -400, 0, Close);
-        for (int i = 0; i < navigation.Count; i++)
-        {
-            var nav = new Navigation { mode = Navigation.Mode.Explicit,
-                selectOnUp = navigation[(i + navigation.Count - 1) % navigation.Count],
-                selectOnDown = navigation[(i + 1) % navigation.Count] };
-            navigation[i].navigation = nav;
-        }
-        navigation[0].Select();
+        AddSlider(parent, "Master Volume", GameAudio.MasterKey, GameAudio.Master, 95f);
+        AddSlider(parent, "Camera Shake", GameAudio.ShakeKey, GameAudio.Shake, -58f);
+        AddBack(parent, -209f);
+        MenuTheme.Label(parent, font, "↑ ↓ or Tab to select   ·   ← → to adjust   ·   Esc to go back", 22,
+            TextAnchor.MiddleCenter, new Vector2(0f, -275f), new Vector2(730f, 44f), MenuTheme.Muted);
     }
 
-    void TextAt(string value, float y, int size, float height)
+    void AddSlider(Transform parent, string label, string key, float value, float y)
     {
-        var text = SeghaniTakSceneBuilder.MakeText(screen.transform, "Text", font, size, TextAnchor.MiddleCenter,
-            new Vector2(.5f,.5f), new Vector2(0,y), new Vector2(1550,height));
-        text.horizontalOverflow = HorizontalWrapMode.Wrap; text.raycastTarget = false; text.text = value;
-    }
-    void AddSlider(string label, string key, float value, float y) =>
-        navigation.Add(GameAudio.Slider(screen.transform, font, label, key, value, y));
-    void AddButton(string label, float y, float x, UnityEngine.Events.UnityAction action)
-    {
-        var button = SeghaniTakSceneBuilder.MakeButton(screen.transform, label, font, new Vector2(x,y));
-        button.onClick.AddListener(action); navigation.Add(button);
-    }
-    void HelpCard(string title, string icon, string body, float x, float y)
-    {
-        var card = SeghaniTakSceneBuilder.MakePanel(screen.transform, title, new Color(.12f,.18f,.2f));
-        var rect = card.GetComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(.5f,.5f);
-        rect.sizeDelta = new Vector2(780,240); rect.anchoredPosition = new Vector2(x,y);
-        var heading = SeghaniTakSceneBuilder.MakeText(card.transform,"Heading",font,32,TextAnchor.MiddleLeft,
-            new Vector2(.5f,.5f),new Vector2(0,82),new Vector2(700,45));
-        heading.text = title; heading.fontStyle = FontStyle.Bold;
-        if (title == "Take Cover")
+        const float width = 722f;
+        var track = MenuTheme.Card(parent, label + " Slider", new Vector2(0f, y),
+            new Vector2(width, 120f), Color.white);
+        var slider = track.AddComponent<Slider>();
+        slider.targetGraphic = track.GetComponent<Image>();
+
+        var colors = slider.colors;
+        colors.normalColor = new Color(.13f, .21f, .23f);
+        colors.selectedColor = new Color(.20f, .34f, .31f);
+        colors.highlightedColor = colors.selectedColor;
+        colors.pressedColor = colors.selectedColor;
+        colors.fadeDuration = .12f;
+        slider.colors = colors;
+
+        MenuTheme.Label(track.transform, font, label, 28, TextAnchor.MiddleLeft,
+            new Vector2(-104f, 29f), new Vector2(456f, 42f), MenuTheme.Text, true);
+        var percent = MenuTheme.Label(track.transform, font, Percent(value), 26, TextAnchor.MiddleRight,
+            new Vector2(267f, 29f), new Vector2(130f, 42f), MenuTheme.Accent, true);
+        var rail = SliderPart(track.transform, "Rail", new Vector2(0f, -24f),
+            new Vector2(width - 56f, 9f), new Color(.38f, .49f, .48f));
+        var fill = SliderPart(rail, "Fill", Vector2.zero, Vector2.zero, MenuTheme.Accent);
+        var handle = SliderPart(rail, "Handle", Vector2.zero, new Vector2(18f, 31f), MenuTheme.Text);
+
+        slider.fillRect = fill;
+        slider.handleRect = handle;
+        slider.value = value;
+        slider.onValueChanged.AddListener(newValue =>
         {
-            IconBar(card.transform,new Vector2(285,91),new Vector2(100,9));
-            IconBar(card.transform,new Vector2(244,64),new Vector2(8,48));
-            IconBar(card.transform,new Vector2(326,64),new Vector2(8,48));
-            IconBar(card.transform,new Vector2(281,55),new Vector2(32,20));
-        }
-        else if (title == "Watch for Hazards")
-        {
-            var sign=SeghaniTakSceneBuilder.MakeText(card.transform,"Warning sign",font,50,TextAnchor.MiddleCenter,
-                new Vector2(.5f,.5f),new Vector2(300,77),new Vector2(70,65));
-            sign.text="!"; sign.color=new Color(1f,.8f,.35f);
-        }
-        var keys = SeghaniTakSceneBuilder.MakeText(card.transform,"Control icon",font,26,TextAnchor.MiddleLeft,
-            new Vector2(.5f,.5f),new Vector2(0,33),new Vector2(700,45));
-        keys.text=icon; keys.color=new Color(.7f,.9f,.77f);
-        var text = SeghaniTakSceneBuilder.MakeText(card.transform,"Instruction",font,27,TextAnchor.UpperLeft,
-            new Vector2(.5f,.5f),new Vector2(0,-48),new Vector2(700,100));
-        text.text=body; text.horizontalOverflow=HorizontalWrapMode.Wrap;
+            PlayerPrefs.SetFloat(key, newValue);
+            percent.text = Percent(newValue);
+            GameAudio.ApplySettings();
+        });
     }
 
-    void IconBar(Transform parent, Vector2 position, Vector2 size)
+    static RectTransform SliderPart(Transform parent, string name, Vector2 position, Vector2 size, Color color)
     {
-        var bar = new GameObject("Shelter illustration",typeof(RectTransform),typeof(Image));
-        bar.transform.SetParent(parent,false);
-        var image=bar.GetComponent<Image>(); image.color=new Color(.7f,.9f,.77f); image.raycastTarget=false;
-        var rect=bar.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=new Vector2(.5f,.5f);
-        rect.anchoredPosition=position;rect.sizeDelta=size;
+        var part = MenuTheme.Card(parent, name, position, size, color);
+        var image = part.GetComponent<Image>();
+        image.raycastTarget = false;
+        return image.rectTransform;
+    }
+
+    static string Percent(float value) => Mathf.RoundToInt(value * 100f) + "%";
+
+    void BuildHelp(Transform parent)
+    {
+        HelpCard(parent, "Goal", "Orientation → Shaking",
+            "Find sturdy cover and look over your routes during orientation. Survive the shaking crouched fully under a desk or table when the countdown reaches zero.",
+            -326f, 211f);
+        HelpCard(parent, "Movement", "WASD / Arrows  ·  Mouse",
+            "Move with WASD or arrows and look with the mouse. Press E near a key or door, Esc to pause, or H for help.",
+            326f, 211f);
+        var cover = HelpCard(parent, "Cover", "Hold C / Ctrl",
+            "Get your whole body under sturdy cover and watch the shelter indicator. You can leave cover and return before time runs out.",
+            -326f, -37f);
+        DrawCover(cover);
+        HelpCard(parent, "Hazards", "Watch and listen",
+            "Look for shifting objects and listen for creaking. Stop, back away, or change routes before something falls. A dangerous impact can end the round.",
+            326f, -37f);
+        var shortcut = MenuTheme.Card(parent, "Optional shortcut", new Vector2(0f, -229f),
+            new Vector2(1272f, 118f), new Color(.105f, .163f, .177f));
+        MenuTheme.Label(shortcut.transform, font, "Optional shortcut in Two-Floor House", 26, TextAnchor.MiddleLeft,
+            new Vector2(0f, 31f), new Vector2(1216f, 36f), MenuTheme.Accent, true);
+        MenuTheme.Label(shortcut.transform, font,
+            "During orientation, press E near the entry-wall key to collect it and near the locked shortcut to open it. Take another route around the separate jammed upstairs door.",
+            24, TextAnchor.UpperLeft, new Vector2(0f, -21f), new Vector2(1216f, 60f), MenuTheme.Muted);
+        MenuTheme.Label(parent, font,
+            "The countdown is a game rule. Indoors during a real earthquake, drop, cover, and hold on.",
+            22, TextAnchor.MiddleCenter, new Vector2(0f, -325f), new Vector2(1272f, 44f), MenuTheme.Muted);
+
+        AddBack(parent, -395f);
+        MenuTheme.Label(parent, font, "Esc to go back", 22, TextAnchor.MiddleCenter,
+            new Vector2(0f, -452f), new Vector2(650f, 38f), MenuTheme.Muted);
+    }
+
+    Transform HelpCard(Transform parent, string title, string cue, string body, float x, float y)
+    {
+        var card = MenuTheme.Card(parent, title, new Vector2(x, y), new Vector2(620f, 230f),
+            new Color(.105f, .163f, .177f));
+        MenuTheme.Label(card.transform, font, title, 31, TextAnchor.MiddleLeft,
+            new Vector2(0f, 75f), new Vector2(564f, 47f), MenuTheme.Text, true);
+        MenuTheme.Label(card.transform, font, cue, 24, TextAnchor.MiddleLeft,
+            new Vector2(0f, 31f), new Vector2(564f, 42f), MenuTheme.Accent, true);
+        MenuTheme.Label(card.transform, font, body, 25, TextAnchor.UpperLeft,
+            new Vector2(0f, -49f), new Vector2(564f, 110f), MenuTheme.Muted);
+        return card.transform;
+    }
+
+    static void DrawCover(Transform card)
+    {
+        MenuTheme.Card(card, "Tabletop", new Vector2(220f, 83f), new Vector2(118f, 7f), MenuTheme.Muted);
+        MenuTheme.Card(card, "Left leg", new Vector2(172f, 56f), new Vector2(5f, 50f), MenuTheme.Muted);
+        MenuTheme.Card(card, "Right leg", new Vector2(268f, 56f), new Vector2(5f, 50f), MenuTheme.Muted);
+        MenuTheme.Card(card, "Head", new Vector2(233f, 61f), new Vector2(14f, 14f), MenuTheme.Accent);
+        var back = MenuTheme.Card(card, "Crouched back", new Vector2(219f, 45f), new Vector2(34f, 9f), MenuTheme.Accent);
+        back.transform.localRotation = Quaternion.Euler(0f, 0f, 28f);
+        MenuTheme.Card(card, "Legs", new Vector2(224f, 34f), new Vector2(28f, 6f), MenuTheme.Accent);
+    }
+
+    void AddBack(Transform parent, float y)
+    {
+        MenuTheme.Button(parent, font, "Back", new Vector2(0f, y), new Vector2(250f, 64f), Close);
     }
 
     public void Close()
     {
-        if (!open) return;
+        if (!screen) return;
+
         consumedFrame = Time.frameCount;
-        screen.SetActive(false); Destroy(screen); open = false;
-        if (caller) caller.SetActive(true);
+        PlayerPrefs.Save();
+        screen.SetActive(false);
+        Destroy(screen);
+        screen = null;
+
         if (hud) hud.SetActive(savedHud);
-        Time.timeScale = savedTime; AudioListener.pause = savedAudio;
-        Cursor.lockState = savedLock; Cursor.visible = savedCursor;
-        if (EventSystem.current) EventSystem.current.SetSelectedGameObject(previousSelection);
+        if (caller) caller.SetActive(true);
+        if (previousSelection && previousSelection.activeInHierarchy && EventSystem.current)
+            EventSystem.current.SetSelectedGameObject(previousSelection);
+
+        Time.timeScale = savedTime;
+        AudioListener.pause = savedAudioPause;
+        Cursor.lockState = savedCursorLock;
+        Cursor.visible = savedCursorVisible;
     }
+
     void Update()
     {
-        if (open)
+        if (consumedFrame == Time.frameCount) return;
+
+        if (screen)
         {
-            if (consumedFrame == Time.frameCount) return;
-            if (Input.GetKeyDown(KeyCode.Escape)) { Close(); return; }
-            if (Input.GetKeyDown(KeyCode.Tab))
-            {
-                var selected = EventSystem.current.currentSelectedGameObject;
-                int index = navigation.FindIndex(s => s.gameObject == selected);
-                int direction = Input.GetKey(KeyCode.LeftShift) ? -1 : 1;
-                navigation[(index + direction + navigation.Count) % navigation.Count].Select();
-            }
+            if (Input.GetKeyDown(KeyCode.Escape)) Close();
         }
         else if (GameFlow.Playing && Input.GetKeyDown(KeyCode.H))
         {
-            var director = FindFirstObjectByType<EarthquakeDirector>();
-            if (director && director.CurrentPhase != EarthquakeDirector.Phase.Ended)
-            {
-                var pause = FindFirstObjectByType<PauseMenu>();
-                Help(pause && pause.IsPaused ? pause.panel : null);
-            }
+            var pause = FindFirstObjectByType<PauseMenu>();
+            Help(pause && pause.IsPaused ? pause.panel : null);
         }
     }
-    void OnDestroy() { if (instance == this) instance = null; }
+
+    void OnDestroy()
+    {
+        if (instance == this) instance = null;
+    }
 }
